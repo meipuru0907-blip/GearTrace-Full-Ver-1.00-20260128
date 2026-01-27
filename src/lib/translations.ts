@@ -7,7 +7,8 @@ export const translations = {
             dashboard: "ダッシュボード",
             addGear: "機材登録",
             settings: "設定",
-            logout: "ログアウト"
+            logout: "ログアウト",
+            packingLists: "持ち出しリスト"
         },
         dashboard: {
             inventory: "機材一覧",
