@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { utils, write } from "xlsx";
+import { ProFeature } from "@/components/common/ProFeature";
 
 export default function Dashboard() {
     const [search, setSearch] = useState("");
@@ -107,12 +108,14 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.inventory')}</h1>
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={handleExportXlsx} disabled={!gears?.length}>
-                            <Download className="mr-2 h-4 w-4" /> {t('dashboard.syncToSheets')}
-                        </Button>
-                        <Button asChild>
-                            <Link to="/add">{t('dashboard.registerNew')}</Link>
-                        </Button>
+                        <ProFeature>
+                            <Button variant="outline" onClick={handleExportXlsx} disabled={!gears?.length}>
+                                <Download className="mr-2 h-4 w-4" /> {t('dashboard.syncToSheets')}
+                            </Button>
+                        </ProFeature>
+                        <Link to="/add">
+                            <Button>{t('dashboard.addGear')}</Button>
+                        </Link>
                     </div>
                 </div>
 

@@ -5,10 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Download, Database } from "lucide-react";
 import { toast } from "sonner";
 import { utils, write } from "xlsx";
+import { useLicense } from "@/contexts/LicenseContext";
+import { ProFeature } from "@/components/common/ProFeature";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
 
 export default function Settings() {
     const gears = useLiveQuery(() => db.gear.toArray());
     const logs = useLiveQuery(() => db.logs.toArray());
+    const { isPro, activateLicense } = useLicense();
+    const [licenseKey, setLicenseKey] = useState("");
+
+    const handleActivate = () => {
+        if (activateLicense(licenseKey)) {
+            setLicenseKey("");
+        }
+    };
 
     const handleExportXlsx = () => {
         if (!gears || gears.length === 0) {
@@ -102,23 +114,53 @@ export default function Settings() {
 
                 <div className="bg-card p-6 rounded-lg border space-y-6">
                     <div>
+                        <h2 className="text-lg font-semibold mb-4">ライセンス管理</h2>
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-accent/20">
+                            <div>
+                                <h3 className="font-medium">現在のプラン</h3>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    {isPro ? "Pro Plan (有効化済み)" : "Free Plan (無料版)"}
+                                </p>
+                            </div>
+                            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${isPro ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                {isPro ? "PRO" : "FREE"}
+                            </div>
+                        </div>
+
+                        {!isPro && (
+                            <div className="mt-4 flex gap-2">
+                                <Input
+                                    placeholder="ライセンスキーを入力 (例: GEAR-PRO-2026)"
+                                    value={licenseKey}
+                                    onChange={(e) => setLicenseKey(e.target.value)}
+                                    className="max-w-md"
+                                />
+                                <Button onClick={handleActivate}>有効化</Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="bg-card p-6 rounded-lg border space-y-6">
+                    <div>
                         <h2 className="text-lg font-semibold mb-4">データ管理</h2>
                         <div className="space-y-3">
                             <div className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
                                 <div className="flex-1">
                                     <h3 className="font-medium">Excelエクスポート (.xlsx)</h3>
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        現在の機材リストを固定資産台帳形式のExcelファイルとして書き出します。
+                                        現在のインベントリをExcel形式でダウンロードします。
                                     </p>
                                 </div>
-                                <Button
-                                    onClick={handleExportXlsx}
-                                    disabled={!gears || gears.length === 0}
-                                    className="ml-4"
-                                >
-                                    <Download className="mr-2 h-4 w-4" />
-                                    エクスポート
-                                </Button>
+                                <ProFeature>
+                                    <Button
+                                        onClick={handleExportXlsx}
+                                        disabled={!gears || gears.length === 0}
+                                        variant="outline"
+                                    >
+                                        <Download className="mr-2 h-4 w-4" /> エクスポート
+                                    </Button>
+                                </ProFeature>
                             </div>
 
                             <div className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
