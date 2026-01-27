@@ -16,8 +16,8 @@ export default function Settings() {
     const { isPro, activateLicense } = useLicense();
     const [licenseKey, setLicenseKey] = useState("");
 
-    const handleActivate = () => {
-        if (activateLicense(licenseKey)) {
+    const handleActivate = async () => {
+        if (await activateLicense(licenseKey)) {
             setLicenseKey("");
         }
     };
