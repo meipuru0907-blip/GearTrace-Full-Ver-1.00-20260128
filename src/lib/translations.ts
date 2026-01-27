@@ -13,6 +13,7 @@ export const translations = {
             inventory: "機材一覧",
             searchPlaceholder: "機材を検索...",
             registerNew: "新規登録",
+            addGear: "機材登録",
             syncToSheets: "Excelに出力 (.xlsx)",
             syncSuccess: "Excelファイルをダウンロードしました！",
             syncError: "出力に失敗しました。",

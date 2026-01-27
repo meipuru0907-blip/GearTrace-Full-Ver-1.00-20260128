@@ -6,7 +6,7 @@ import { GearListItem } from "@/components/GearListItem";
 import { Layout } from "@/components/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, LayoutGrid, AlignJustify, Download, Maximize2 } from "lucide-react";
+import { Download, Search, LayoutGrid, AlignJustify, Maximize2, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -114,7 +114,10 @@ export default function Dashboard() {
                             </Button>
                         </ProFeature>
                         <Link to="/add">
-                            <Button>{t('dashboard.addGear')}</Button>
+                            <Button>
+                                <Plus className="mr-2 h-4 w-4" />
+                                {t('dashboard.addGear')}
+                            </Button>
                         </Link>
                     </div>
                 </div>
