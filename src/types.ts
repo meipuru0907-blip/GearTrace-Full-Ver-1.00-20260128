@@ -20,7 +20,22 @@ export interface Gear {
     notes?: string; // Additional notes
     createdAt: number; // Timestamp
     updatedAt: number; // Timestamp
+    documents?: {
+        id: string;
+        name: string;
+        data: string; // Base64
+        uploadDate: number;
+    }[];
     logs?: Log[]; // Associated logs (for joins, not stored directly)
+}
+
+export interface PackingList {
+    id: string; // UUID
+    name: string;
+    date: string;
+    gearIds: string[]; // List of gear IDs included
+    createdAt: number;
+    updatedAt: number;
 }
 
 

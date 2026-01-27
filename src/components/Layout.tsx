@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, Settings, Box } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Settings, Box, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Footer } from "./Footer";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -24,6 +24,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <nav className="grid items-start px-2 text-sm font-medium lg:px-4 gap-2 mt-4">
                     <NavItem to="/" icon={LayoutDashboard} label={t('app.dashboard')} />
                     <NavItem to="/add" icon={PlusCircle} label={t('app.addGear')} />
+                    <NavItem to="/packing-lists" icon={ListChecks} label={t('app.packingLists')} />
                     <NavItem to="/settings" icon={Settings} label={t('app.settings')} />
                 </nav>
             </aside>
