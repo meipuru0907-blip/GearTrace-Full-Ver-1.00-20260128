@@ -30,27 +30,29 @@ export function FinanceAnalysisModal({
     subscriptions
 }: FinanceAnalysisModalProps) {
     // Asset calculations
-    const totalAssetValue = gears.reduce((sum, g) => sum + g.purchasePrice, 0);
+    const totalAssetValue = gears.reduce((sum, g) => sum + (g.purchasePrice * (g.quantity || 1)), 0);
 
     // Category breakdown
     const categoryBreakdown = gears.reduce((acc, gear) => {
         const category = gear.category || 'その他';
+        const qty = gear.quantity || 1;
         if (!acc[category]) {
             acc[category] = { count: 0, value: 0 };
         }
-        acc[category].count += 1;
-        acc[category].value += gear.purchasePrice;
+        acc[category].count += qty;
+        acc[category].value += (gear.purchasePrice * qty);
         return acc;
     }, {} as Record<string, { count: number; value: number }>);
 
     // Status breakdown
     const statusBreakdown = gears.reduce((acc, gear) => {
         const status = gear.status;
+        const qty = gear.quantity || 1;
         if (!acc[status]) {
             acc[status] = { count: 0, value: 0 };
         }
-        acc[status].count += 1;
-        acc[status].value += gear.purchasePrice;
+        acc[status].count += qty;
+        acc[status].value += (gear.purchasePrice * qty);
         return acc;
     }, {} as Record<string, { count: number; value: number }>);
 
@@ -91,7 +93,7 @@ export function FinanceAnalysisModal({
                                     <Package className="h-12 w-12 text-primary opacity-20" />
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2">
-                                    {gears.length}個の機材
+                                    {gears.reduce((sum, g) => sum + (g.quantity || 1), 0)}個の機材
                                 </p>
                             </CardContent>
                         </Card>

@@ -10,6 +10,7 @@ import type { Subscription, BillingCycle, SubscriptionCategory } from "@/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export default function Subscriptions() {
     const subscriptions = useLiveQuery(() => db.subscriptions.toArray());
@@ -19,7 +20,7 @@ export default function Subscriptions() {
     // Form state
     const [formData, setFormData] = useState({
         name: "",
-        category: "Software" as SubscriptionCategory,
+        category: "Software", // Default text, technically type is SubscriptionCategory but we allow string input now
         price: "",
         billingCycle: "monthly" as BillingCycle,
         startDate: new Date().toISOString().split('T')[0],
@@ -29,13 +30,14 @@ export default function Subscriptions() {
     });
 
     const resetForm = () => {
+        const today = new Date().toISOString().split('T')[0];
         setFormData({
             name: "",
-            category: "Software",
+            category: "",
             price: "",
             billingCycle: "monthly",
-            startDate: new Date().toISOString().split('T')[0],
-            nextPaymentDate: new Date().toISOString().split('T')[0],
+            startDate: today,
+            nextPaymentDate: today, // Will be updated by effect ideally or left as today if no date entered logic
             autoRenew: true,
             notes: ""
         });
@@ -57,6 +59,15 @@ export default function Subscriptions() {
             });
         } else {
             resetForm();
+            // Initial auto-calc for new form will happen via useEffect if we trigger it, 
+            // but let's set a reasonable default for nextPaymentDate based on today + 1 month
+            const today = new Date();
+            const nextMonth = new Date(today);
+            nextMonth.setMonth(today.getMonth() + 1);
+            setFormData(prev => ({
+                ...prev,
+                nextPaymentDate: nextMonth.toISOString().split('T')[0]
+            }));
         }
         setIsDialogOpen(true);
     };
@@ -64,6 +75,55 @@ export default function Subscriptions() {
     const handleCloseDialog = () => {
         setIsDialogOpen(false);
         resetForm();
+    };
+
+    // Helper to calculate next payment date safely
+    const calculateNextPaymentDate = (startDateStr: string, cycle: BillingCycle): string => {
+        if (!startDateStr) return "";
+
+        const [year, month, day] = startDateStr.split('-').map(Number);
+        if (!year || !month || !day) return "";
+
+        // Create date at noon to verify valid date
+        const date = new Date(year, month - 1, day, 12, 0, 0);
+
+        if (cycle === 'monthly') {
+            const currentDay = date.getDate();
+            date.setMonth(date.getMonth() + 1);
+
+            // Handle month rollover (e.g., Jan 31 -> Feb 28/29 instead of Mar 2/3)
+            if (date.getDate() !== currentDay) {
+                date.setDate(0); // Set to last day of previous month
+            }
+        } else {
+            date.setFullYear(date.getFullYear() + 1);
+        }
+
+        const nextYear = date.getFullYear();
+        // Month is 0-indexed in JS Date, so +1. padStart ensures '05' format.
+        const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+        const nextDay = String(date.getDate()).padStart(2, '0');
+
+        return `${nextYear}-${nextMonth}-${nextDay}`;
+    };
+
+    const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newStartDate = e.target.value;
+        const newNextPaymentDate = calculateNextPaymentDate(newStartDate, formData.billingCycle);
+        setFormData(prev => ({
+            ...prev,
+            startDate: newStartDate,
+            nextPaymentDate: newNextPaymentDate || prev.nextPaymentDate // Fallback to current if invalid
+        }));
+    };
+
+    const handleBillingCycleChange = (value: BillingCycle) => {
+        const newNextPaymentDate = calculateNextPaymentDate(formData.startDate, value);
+        setFormData(prev => ({
+            ...prev,
+            billingCycle: value,
+            nextPaymentDate: newNextPaymentDate || prev.nextPaymentDate
+        }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -85,7 +145,7 @@ export default function Subscriptions() {
                 // Update existing
                 await db.subscriptions.update(editingSubscription.id, {
                     name: formData.name,
-                    category: formData.category,
+                    category: formData.category as SubscriptionCategory,
                     price: price,
                     billingCycle: formData.billingCycle,
                     startDate: formData.startDate,
@@ -100,7 +160,7 @@ export default function Subscriptions() {
                 const newSubscription: Subscription = {
                     id: crypto.randomUUID(),
                     name: formData.name,
-                    category: formData.category,
+                    category: formData.category as SubscriptionCategory,
                     price: price,
                     billingCycle: formData.billingCycle,
                     startDate: formData.startDate,
@@ -311,18 +371,20 @@ export default function Subscriptions() {
 
                             <div>
                                 <Label htmlFor="category">カテゴリ</Label>
-                                <select
+                                <Input
                                     id="category"
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    list="category-options"
                                     value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value as SubscriptionCategory })}
-                                >
-                                    <option value="Software">Software</option>
-                                    <option value="Plugin">Plugin</option>
-                                    <option value="Cloud Storage">Cloud Storage</option>
-                                    <option value="Streaming">Streaming</option>
-                                    <option value="Other">Other</option>
-                                </select>
+                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    placeholder="例: Software, Plugin..."
+                                />
+                                <datalist id="category-options">
+                                    <option value="Software" />
+                                    <option value="Plugin" />
+                                    <option value="Cloud Storage" />
+                                    <option value="Streaming" />
+                                    <option value="Other" />
+                                </datalist>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -337,19 +399,24 @@ export default function Subscriptions() {
                                         required
                                     />
                                 </div>
+                            </div>
 
-                                <div>
-                                    <Label htmlFor="billingCycle">課金周期</Label>
-                                    <select
-                                        id="billingCycle"
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                        value={formData.billingCycle}
-                                        onChange={(e) => setFormData({ ...formData, billingCycle: e.target.value as BillingCycle })}
-                                    >
-                                        <option value="monthly">月額</option>
-                                        <option value="yearly">年額</option>
-                                    </select>
-                                </div>
+                            <div>
+                                <Label className="mb-2 block">課金周期</Label>
+                                <RadioGroup
+                                    value={formData.billingCycle}
+                                    onValueChange={(value) => handleBillingCycleChange(value as BillingCycle)}
+                                    className="flex gap-4"
+                                >
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="monthly" id="monthly" />
+                                        <Label htmlFor="monthly">月額 (Monthly)</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="yearly" id="yearly" />
+                                        <Label htmlFor="yearly">年額 (Yearly)</Label>
+                                    </div>
+                                </RadioGroup>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -359,12 +426,12 @@ export default function Subscriptions() {
                                         id="startDate"
                                         type="date"
                                         value={formData.startDate}
-                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                        onChange={handleStartDateChange}
                                     />
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="nextPaymentDate">次回支払日</Label>
+                                    <Label htmlFor="nextPaymentDate">次回支払日 (自動計算)</Label>
                                     <Input
                                         id="nextPaymentDate"
                                         type="date"

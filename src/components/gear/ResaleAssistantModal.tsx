@@ -42,7 +42,14 @@ export function ResaleAssistantModal({ gear, logs, onClose }: ResaleAssistantMod
 
     const handleCopyText = async () => {
         try {
-            await navigator.clipboard.writeText(listingText);
+            let finalText = listingText;
+
+            // Append accessories if selected
+            if (selectedAccessories.length > 0) {
+                finalText += `\n\n【付属品】\n` + selectedAccessories.map(a => `・${a}`).join('\n');
+            }
+
+            await navigator.clipboard.writeText(finalText);
             toast.success("テキストをクリップボードにコピーしました！");
         } catch (error) {
             console.error("Copy failed:", error);

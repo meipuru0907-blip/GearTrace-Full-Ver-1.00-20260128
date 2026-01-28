@@ -4,10 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColorTagger } from "@/components/ColorTagger";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 import type { Gear } from "@/types";
 import { Save, ChevronLeft } from "lucide-react";
-import { getStatusOptions } from "@/utils/constants";
+import { getStatusOptions, getAllStatuses, GEAR_STATUS_LABELS } from "@/utils/constants";
 
 export interface GearFormValues {
     manufacturer: string;
@@ -25,6 +27,8 @@ export interface GearFormValues {
     quantity: number;
     isContainer: boolean;
     containerId: string | undefined;
+    // New field for splitting
+    statusBreakdown?: Record<string, number>;
 }
 
 interface GearFormProps {
@@ -53,10 +57,34 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
         containerId: defaultValues.containerId || undefined,
     });
 
+    const [isSplitMode, setIsSplitMode] = useState(false);
+    const [breakdown, setBreakdown] = useState<Record<string, number>>({});
+
+    const handleBreakdownChange = (status: string, val: number) => {
+        setBreakdown(prev => ({
+            ...prev,
+            [status]: val
+        }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit(formData);
+
+        if (isSplitMode) {
+            // Validate total
+            const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+            if (total !== formData.quantity) {
+                toast.error(`ステータス内訳の合計(${total})が総数量(${formData.quantity})と一致しません`);
+                return;
+            }
+            // Filter out 0s
+            const cleanBreakdown = Object.fromEntries(
+                Object.entries(breakdown).filter(([_, v]) => v > 0)
+            );
+            onSubmit({ ...formData, statusBreakdown: cleanBreakdown });
+        } else {
+            onSubmit(formData);
+        }
     };
 
     return (
@@ -100,14 +128,10 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                     </div>
                 </div>
 
-
-
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="category">カテゴリ *</Label>
-                        <Input // Switched to Input with datalist or just Input for flexibility based on AddGear vs Edit differences, but keeping simple for now
-                            // Edit used select, Add used Input. Let's standardize on Input with suggestions or Select. 
-                            // Guideline says: "Consistency". Let's use Select as it's cleaner.
+                        <Input
                             id="category"
                             list="category-options"
                             placeholder="e.g. Microphone"
@@ -137,7 +161,6 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                 </div>
             </div>
 
-
             {/* Inventory Section */}
             <div className="bg-card p-6 rounded-lg border space-y-4">
                 <h3 className="text-sm font-medium text-muted-foreground border-b pb-2 mb-4">数量</h3>
@@ -146,9 +169,13 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                     <Input
                         id="quantity"
                         type="number"
-                        min="1"
-                        value={formData.quantity}
-                        onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
+                        min="0"
+                        value={formData.quantity === 0 ? '' : formData.quantity}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            const num = val === '' ? 0 : parseInt(val);
+                            setFormData({ ...formData, quantity: Math.max(0, num) });
+                        }}
                     />
                 </div>
 
@@ -171,34 +198,90 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
 
             {/* Status & ID */}
             <div className="bg-card p-6 rounded-lg border space-y-4">
-                <h3 className="text-sm font-medium text-muted-foreground border-b pb-2 mb-4">ステータス・識別</h3>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="status">ステータス *</Label>
-                        <select
-                            id="status"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            value={formData.status}
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value as Gear['status'] })}
-                            required
-                        >
-                            {getStatusOptions().map(option => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>識別タグ</Label>
-                        <div className="pt-2">
-                            <ColorTagger
-                                selectedColor={formData.colorTag}
-                                onSelect={(c) => setFormData({ ...formData, colorTag: c === "" ? undefined : c })}
+                <div className="flex items-center justify-between border-b pb-2 mb-4">
+                    <h3 className="text-sm font-medium text-muted-foreground">ステータス・識別</h3>
+                    {formData.quantity >= 2 && (
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="splitMode"
+                                checked={isSplitMode}
+                                onCheckedChange={(c) => {
+                                    setIsSplitMode(!!c);
+                                    if (c) {
+                                        // Init breakdown with current status
+                                        setBreakdown({ [formData.status]: formData.quantity });
+                                    } else {
+                                        setBreakdown({});
+                                    }
+                                }}
                             />
+                            <Label htmlFor="splitMode" className="cursor-pointer text-xs">ステータスを振り分ける</Label>
+                        </div>
+                    )}
+                </div>
+
+                {isSplitMode ? (
+                    <div className="space-y-4 bg-muted/30 p-4 rounded-md">
+                        <p className="text-xs text-muted-foreground mb-2">
+                            合計数量: {formData.quantity} になるように割り振ってください
+                        </p>
+                        {getAllStatuses().map(status => (
+                            <div key={status} className="flex items-center justify-between gap-4">
+                                <Label className="w-32">{GEAR_STATUS_LABELS[status]}</Label>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    className="h-8"
+                                    value={breakdown[status] === 0 || !breakdown[status] ? '' : breakdown[status]}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        const num = val === '' ? 0 : parseInt(val);
+                                        handleBreakdownChange(status, Math.max(0, num));
+                                    }}
+                                    placeholder="0"
+                                />
+                            </div>
+                        ))}
+                        <div className="flex justify-end pt-2 border-t mt-2">
+                            <span className={cn("text-sm font-bold",
+                                Object.values(breakdown).reduce((a, b) => a + b, 0) === formData.quantity
+                                    ? "text-green-600"
+                                    : "text-red-500"
+                            )}>
+                                現在計: {Object.values(breakdown).reduce((a, b) => a + b, 0)} / {formData.quantity}
+                            </span>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="status">ステータス *</Label>
+                            <select
+                                id="status"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={formData.status}
+                                onChange={(e) => setFormData({ ...formData, status: e.target.value as Gear['status'] })}
+                                required
+                            >
+                                {getStatusOptions().map(option => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>識別タグ</Label>
+                            <div className="pt-2">
+                                <ColorTagger
+                                    selectedColor={formData.colorTag}
+                                    onSelect={(c) => setFormData({ ...formData, colorTag: c === "" ? undefined : c })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-2">
                     <Label htmlFor="serialNumber">シリアル番号</Label>
                     <Input
@@ -229,8 +312,13 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                         <Input
                             id="purchasePrice"
                             type="number"
-                            value={formData.purchasePrice}
-                            onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
+                            min="0"
+                            value={formData.purchasePrice === 0 ? '' : formData.purchasePrice}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                const num = val === '' ? 0 : parseInt(val);
+                                setFormData({ ...formData, purchasePrice: Math.max(0, num) });
+                            }}
                             required
                         />
                     </div>
@@ -239,10 +327,14 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                         <Input
                             id="lifespan"
                             type="number"
-                            value={formData.lifespan}
-                            onChange={(e) => setFormData({ ...formData, lifespan: Number(e.target.value) })}
+                            min="0"
+                            value={formData.lifespan === 0 ? '' : formData.lifespan}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                const num = val === '' ? 0 : parseInt(val);
+                                setFormData({ ...formData, lifespan: Math.max(0, num) });
+                            }}
                             required
-                            min="1"
                         />
                     </div>
                 </div>

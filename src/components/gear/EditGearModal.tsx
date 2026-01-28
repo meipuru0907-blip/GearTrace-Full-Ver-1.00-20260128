@@ -14,13 +14,54 @@ interface EditGearModalProps {
 export function EditGearModal({ gear, onClose, onUpdate }: EditGearModalProps) {
     const handleFormSubmit = async (values: GearFormValues) => {
         try {
-            await db.gear.update(gear.id, {
-                ...values,
-                colorTag: values.colorTag as Gear['colorTag'],
-                updatedAt: Date.now(),
-            });
+            if (values.statusBreakdown && Object.keys(values.statusBreakdown).length > 0) {
+                // Split Logic
+                const entries = Object.entries(values.statusBreakdown);
 
-            toast.success("機材情報を更新しました");
+                // 1. Update the original record with the first breakdown entry
+                // Ideally, we keep the original ID for one chunk. 
+                // Let's iterate and use the first one for the original ID.
+
+                const [firstStatus, firstQty] = entries[0];
+
+                // Update original
+                await db.gear.update(gear.id, {
+                    ...values,
+                    // Remove transient field
+                    status: firstStatus as Gear['status'],
+                    quantity: firstQty,
+                    colorTag: values.colorTag as Gear['colorTag'],
+                    updatedAt: Date.now(),
+                });
+
+                // 2. Create new records for the rest
+                const remainingEntries = entries.slice(1);
+                const newRecords = remainingEntries.map(([status, qty]) => ({
+                    ...gear, // Copy original properties (photos, details etc)
+                    ...values, // Overwrite with form values (name, etc might have changed)
+                    id: crypto.randomUUID(), // New ID
+                    status: status as Gear['status'],
+                    quantity: qty,
+                    colorTag: values.colorTag as Gear['colorTag'],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                }));
+
+                if (newRecords.length > 0) {
+                    await db.gear.bulkAdd(newRecords);
+                }
+
+                toast.success(`機材をステータスごとに分割・更新しました`);
+            } else {
+                // Normal Update
+                await db.gear.update(gear.id, {
+                    ...values,
+                    colorTag: values.colorTag as Gear['colorTag'],
+                    updatedAt: Date.now(),
+                });
+                toast.success("機材情報を更新しました");
+            }
+
             onUpdate();
             onClose();
         } catch (error) {
