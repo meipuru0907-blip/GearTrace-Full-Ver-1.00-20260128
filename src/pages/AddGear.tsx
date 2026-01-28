@@ -58,6 +58,7 @@ export default function AddGear() {
                     feature: photos.feature
                 },
                 visualTagColor: formData.visualTagColor,
+                colorTag: (formData.visualTagColor as Gear['colorTag']) || undefined, // Map visualTagColor to colorTag
                 status: 'Available', // Default status
                 purchaseDate: formData.purchaseDate!,
                 purchasePrice: Number(formData.purchasePrice) || 0,

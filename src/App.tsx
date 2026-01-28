@@ -1,28 +1,32 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
-import AddGear from "./pages/AddGear";
-import GearDetail from "./pages/GearDetail";
-import Settings from "./pages/Settings";
-import PackingLists from "./pages/PackingLists";
-import { Toaster } from "sonner";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { LicenseProvider } from "./contexts/LicenseContext";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { LanguageProvider } from './contexts/LanguageContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import Dashboard from './pages/Dashboard';
+import AddGear from './pages/AddGear';
+import GearDetail from './pages/GearDetail';
+import Settings from './pages/Settings';
+import PackingLists from './pages/PackingLists';
+import PackingListDetail from './pages/PackingListDetail';
+import Subscriptions from './pages/Subscriptions';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <LicenseProvider>
+    <ThemeProvider>
+      <LanguageProvider>
         <Router>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/add" element={<AddGear />} />
             <Route path="/gear/:id" element={<GearDetail />} />
-            <Route path="/packing-lists" element={<PackingLists />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/packing-lists" element={<PackingLists />} />
+            <Route path="/packing-lists/:id" element={<PackingListDetail />} />
+            <Route path="/subscriptions" element={<Subscriptions />} />
           </Routes>
-          <Toaster />
+          <Toaster richColors position="top-right" />
         </Router>
-      </LicenseProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

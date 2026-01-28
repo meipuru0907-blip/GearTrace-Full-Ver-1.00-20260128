@@ -1,10 +1,11 @@
 import Dexie, { type Table } from 'dexie';
-import type { Gear, Log, PackingList } from '../types'; // Added PackingList type import
+import type { Gear, Log, PackingList, Subscription } from '../types'; // Added Subscription type import
 
 export class GearTraceDB extends Dexie {
     gear!: Table<Gear>;
     logs!: Table<Log>;
     packingLists!: Table<PackingList>; // Added packingLists table property
+    subscriptions!: Table<Subscription>; // Subscription management table
 
     constructor() {
         super('GearTraceDB');
@@ -45,10 +46,39 @@ export class GearTraceDB extends Dexie {
             });
         });
 
-        // Keep v2 for backward compatibility
-        this.version(2).stores({
-            gear: 'id, category, status, manufacturer, model, purchaseDate',
-            logs: 'id, gearId, date, type'
+        // Version 4: Add packingLists table (restore from Phase 8)
+        this.version(4).stores({
+            gear: 'id, category, status, manufacturer, model, purchaseDate, createdAt',
+            logs: 'id, gearId, date, type',
+            packingLists: '++id, name, date, createdAt'
+        });
+
+        // Version 5: Add lifespan to gear (Phase 10)
+        this.version(5).stores({
+            gear: 'id, category, status, manufacturer, model, purchaseDate, createdAt',
+            logs: 'id, gearId, date, type',
+            packingLists: '++id, name, date, createdAt'
+        }).upgrade(trans => {
+            return trans.table('gear').toCollection().modify(gear => {
+                if (!gear.lifespan) {
+                    gear.lifespan = 5; // Default 5 years
+                }
+            });
+        });
+
+        // Version 6: Add productEra (Phase 11) - No migration needed for optional field
+        this.version(6).stores({
+            gear: 'id, category, status, manufacturer, model, purchaseDate, createdAt',
+            logs: 'id, gearId, date, type',
+            packingLists: '++id, name, date, createdAt'
+        });
+
+        // Version 7: Add subscriptions table (Phase 34 - Subscription Management)
+        this.version(7).stores({
+            gear: 'id, category, status, manufacturer, model, purchaseDate, createdAt',
+            logs: 'id, gearId, date, type',
+            packingLists: '++id, name, date, createdAt',
+            subscriptions: 'id, category, billingCycle, nextPaymentDate, createdAt'
         });
     }
 }

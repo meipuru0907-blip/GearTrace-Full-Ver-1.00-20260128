@@ -1,7 +1,4 @@
 import type { Gear } from "@/types";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { Badge } from "@/components/ui/badge";
-import { useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 
 interface GearListItemProps {
@@ -10,19 +7,6 @@ interface GearListItemProps {
 }
 
 export function GearListItem({ gear, onClick }: GearListItemProps) {
-    const { t } = useLanguage();
-
-    const statusColor = useMemo(() => {
-        switch (gear.status) {
-            case 'Available': return 'default';
-            case 'InUse': return 'secondary';
-            case 'Maintenance': return 'destructive';
-            case 'Broken': return 'destructive';
-            case 'Sold': return 'outline';
-            default: return 'default';
-        }
-    }, [gear.status]);
-
     return (
         <div
             className="flex items-center gap-4 p-3 bg-card border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
@@ -30,10 +14,10 @@ export function GearListItem({ gear, onClick }: GearListItemProps) {
         >
             {/* Thumbnail */}
             <div className="h-12 w-12 rounded bg-muted overflow-hidden shrink-0">
-                {gear.photos.hero ? (
+                {gear.photos?.hero ? (
                     <img
                         src={gear.photos.hero}
-                        alt={gear.name}
+                        alt={gear.model}
                         className="h-full w-full object-cover"
                     />
                 ) : (
@@ -55,8 +39,6 @@ export function GearListItem({ gear, onClick }: GearListItemProps) {
                 <div className="hidden md:block text-sm font-mono text-muted-foreground">
                     SN: {gear.serialNumber || '-'}
                 </div>
-
-
             </div>
 
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />

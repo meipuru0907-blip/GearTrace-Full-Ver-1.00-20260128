@@ -12,11 +12,13 @@ export interface Gear {
         feature?: string; // The "scratch" or identifier
     };
     visualTagColor?: string; // '#FF0000' etc. (for backward compatibility)
+    colorTag?: 'red' | 'blue' | 'green' | 'yellow' | 'pink' | 'orange' | 'purple';
     status: 'Available' | 'InUse' | 'Maintenance' | 'Broken' | 'Sold' | 'Repair' | 'Missing'; // Required
     purchaseDate: string; // ISO Date
     purchasePrice: number;
     currentValue?: number; // Estimated used price
     lifespan: number; // Depreciation years (default 5)
+    productEra?: string; // e.g. "Released 2015", "1980s Vintage"
     notes?: string; // Additional notes
     createdAt: number; // Timestamp
     updatedAt: number; // Timestamp
@@ -30,12 +32,29 @@ export interface Gear {
 }
 
 export interface PackingList {
-    id: string; // UUID
+    id: number; // Auto-increment ID in Dexie
     name: string;
     date: string;
     gearIds: string[]; // List of gear IDs included
     createdAt: number;
     updatedAt: number;
+}
+
+export type BillingCycle = 'monthly' | 'yearly';
+export type SubscriptionCategory = 'Software' | 'Plugin' | 'Cloud Storage' | 'Streaming' | 'Other';
+
+export interface Subscription {
+    id: string; // UUID
+    name: string; // Service name (e.g., "Smaart v9", "Adobe CC")
+    category: SubscriptionCategory;
+    price: number; // Cost amount
+    billingCycle: BillingCycle;
+    startDate: string; // ISO Date - when subscription started
+    nextPaymentDate: string; // ISO Date
+    autoRenew: boolean; // Whether it auto-renews
+    notes?: string;
+    createdAt: number; // Timestamp
+    updatedAt: number; // Timestamp
 }
 
 

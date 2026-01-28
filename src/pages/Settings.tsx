@@ -2,25 +2,18 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/db";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Download, Database } from "lucide-react";
+import { Download, Database, Upload, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { utils, write } from "xlsx";
-import { useLicense } from "@/contexts/LicenseContext";
-import { ProFeature } from "@/components/common/ProFeature";
-import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import XLSX from "xlsx-js-style";
+import { useRef } from "react";
+import { exportTaxLedger } from "@/lib/excel";
+import { downloadTaxGuideExcel, getTaxGuideEntryCount } from "@/utils/excelExport";
+import { openBugReportForm } from "@/utils/systemInfo";
 
 export default function Settings() {
     const gears = useLiveQuery(() => db.gear.toArray());
     const logs = useLiveQuery(() => db.logs.toArray());
-    const { isPro, activateLicense } = useLicense();
-    const [licenseKey, setLicenseKey] = useState("");
-
-    const handleActivate = async () => {
-        if (await activateLicense(licenseKey)) {
-            setLicenseKey("");
-        }
-    };
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleExportXlsx = () => {
         if (!gears || gears.length === 0) {
@@ -29,7 +22,6 @@ export default function Settings() {
         }
 
         try {
-            // Japanese Fixed Asset Ledger format
             const data = gears.map(g => {
                 return {
                     "資産ID": g.id,
@@ -39,31 +31,104 @@ export default function Settings() {
                     "シリアル番号": g.serialNumber,
                     "ステータス": g.status,
                     "取得年月日": g.purchaseDate,
-                    "取得価額": g.purchasePrice,
+                    "購入価格": g.purchasePrice,
                     "耐用年数": g.lifespan
                 };
             });
 
-            const ws = utils.json_to_sheet(data);
-            const wb = utils.book_new();
-            utils.book_append_sheet(wb, ws, "Assets");
+            const ws = XLSX.utils.json_to_sheet(data);
+
+            // カラム幅を設定
+            ws['!cols'] = [
+                { wch: 38 },  // 資産ID
+                { wch: 18 },  // メーカー
+                { wch: 25 },  // モデル名
+                { wch: 18 },  // カテゴリー
+                { wch: 20 },  // シリアル番号
+                { wch: 15 },  // ステータス
+                { wch: 13 },  // 取得年月日
+                { wch: 12 },  // 購入価格
+                { wch: 10 }   // 耐用年数
+            ];
+
+            // スタイルを適用
+            const range = XLSX.utils.decode_range(ws['!ref']!);
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[cellRef]) continue;
+
+                    const cellStyle: any = {
+                        border: {
+                            top: { style: "thin", color: { rgb: "000000" } },
+                            bottom: { style: "thin", color: { rgb: "000000" } },
+                            left: { style: "thin", color: { rgb: "000000" } },
+                            right: { style: "thin", color: { rgb: "000000" } }
+                        },
+                        alignment: { vertical: "center" },
+                        font: { name: "Yu Gothic", sz: 11 }
+                    };
+
+                    if (R === 0) {
+                        // ヘッダー行
+                        cellStyle.fill = { fgColor: { rgb: "4472C4" } };
+                        cellStyle.font = {
+                            ...cellStyle.font,
+                            color: { rgb: "FFFFFF" },
+                            bold: true,
+                            sz: 12
+                        };
+                        cellStyle.alignment = { horizontal: "center", vertical: "center" };
+                    } else {
+                        // データ行
+                        // 購入価格列は右揃えで数値フォーマット
+                        if (C === 7) {
+                            cellStyle.alignment.horizontal = "right";
+                            ws[cellRef].z = '#,##0';
+                        }
+                        // 耐用年数列は中央揃えで太字
+                        if (C === 8) {
+                            cellStyle.alignment.horizontal = "center";
+                            cellStyle.font.bold = true;
+                        }
+                        // ステータス列に応じて背景色を設定
+                        if (C === 5) {
+                            const status = ws[cellRef].v;
+                            if (status === "Available" || status === "稼働中") {
+                                cellStyle.fill = { fgColor: { rgb: "E8F5E9" } }; // 緑
+                            } else if (status === "Maintenance" || status === "メンテナンス中") {
+                                cellStyle.fill = { fgColor: { rgb: "FFF9C4" } }; // 黄
+                            } else if (status === "Repair" || status === "修理中") {
+                                cellStyle.fill = { fgColor: { rgb: "FFE0B2" } }; // オレンジ
+                            } else if (status === "Broken" || status === "故障") {
+                                cellStyle.fill = { fgColor: { rgb: "FFCDD2" } }; // 赤
+                            } else if (status === "Missing" || status === "紛失") {
+                                cellStyle.fill = { fgColor: { rgb: "F3E5F5" } }; // 紫
+                            }
+                        }
+                    }
+
+                    ws[cellRef].s = cellStyle;
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "資産台帳");
+
+            // メタデータ
+            wb.Props = {
+                Title: '資産台帳（GearTrace）',
+                Subject: '機材資産管理リスト',
+                Author: 'GearTrace',
+                CreatedDate: new Date()
+            };
 
             const today = new Date();
             const dateStr = today.toISOString().split('T')[0];
-            const filename = `GearTrace_Export_${dateStr}.xlsx`;
+            const filename = `GearTrace_資産台帳_${dateStr}.xlsx`;
 
-            const wbout = write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/octet-stream' });
-
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            toast.success("Excelファイルをダウンロードしました！");
+            XLSX.writeFile(wb, filename);
+            toast.success("資産台帳をダウンロードしました！");
         } catch (err) {
             console.error(err);
             toast.error("出力に失敗しました。");
@@ -84,15 +149,12 @@ export default function Settings() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-
             const dateStr = new Date().toISOString().split('T')[0];
             a.download = `GearTrace_Backup_${dateStr}.json`;
-
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-
             toast.success("バックアップファイルを作成しました！");
         } catch (err) {
             console.error(err);
@@ -100,95 +162,167 @@ export default function Settings() {
         }
     };
 
+    const handleTaxExport = () => {
+        if (!gears || gears.length === 0) {
+            toast.error("データがありません。");
+            return;
+        }
+        try {
+            exportTaxLedger(gears);
+            toast.success("確定申告用データを出力しました！");
+        } catch (err) {
+            console.error(err);
+            toast.error("出力に失敗しました。");
+        }
+    };
 
+    const handleImportJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            if (!data.gear || !Array.isArray(data.gear)) {
+                throw new Error("Invalid format");
+            }
+
+            if (!confirm("現在のデータを上書き・マージしますか？この操作は取り消せません。")) {
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                return;
+            }
+
+            await db.transaction('rw', db.gear, db.logs, async () => {
+                await db.gear.bulkPut(data.gear);
+                if (data.logs && Array.isArray(data.logs)) {
+                    await db.logs.bulkPut(data.logs);
+                }
+            });
+
+            toast.success("データの復元が完了しました！");
+            setTimeout(() => window.location.reload(), 1000);
+
+        } catch (err) {
+            console.error(err);
+            toast.error("ファイルの読み込みに失敗しました。形式を確認してください。");
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDownloadTaxGuide = () => {
+        try {
+            const success = downloadTaxGuideExcel();
+            if (success) {
+                const count = getTaxGuideEntryCount();
+                toast.success(`耐用年数マスターガイド（${count}項目）をダウンロードしました！`);
+            } else {
+                toast.error("ダウンロードに失敗しました。");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("ダウンロードに失敗しました。");
+        }
+    };
 
     return (
         <Layout>
-            <div className="max-w-3xl mx-auto space-y-6">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">設定</h1>
-                    <p className="text-muted-foreground mt-1">
-                        データのバックアップや書き出しを行います。
-                    </p>
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <h1 className="text-3xl font-bold tracking-tight">設定</h1>
                 </div>
 
-                <div className="bg-card p-6 rounded-lg border space-y-6">
-                    <div>
-                        <h2 className="text-lg font-semibold mb-4">ライセンス管理</h2>
-                        <div className="flex items-center justify-between p-4 border rounded-lg bg-accent/20">
-                            <div>
-                                <h3 className="font-medium">現在のプラン</h3>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    {isPro ? "Pro Plan (有効化済み)" : "Free Plan (無料版)"}
+                {/* Data Management */}
+                <div className="space-y-4">
+                    <h2 className="text-xl font-semibold flex items-center gap-2">
+                        <Database className="h-5 w-5" /> データ管理
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Exports */}
+                        <div className="p-4 border rounded-lg space-y-4 bg-card">
+                            <h3 className="font-medium">データ書き出し</h3>
+                            <div className="space-y-2">
+                                <Button onClick={handleExportXlsx} variant="outline" className="w-full justify-start">
+                                    <Download className="mr-2 h-4 w-4" /> Excel出力 (資産台帳)
+                                </Button>
+                                <Button onClick={handleTaxExport} variant="outline" className="w-full justify-start">
+                                    <Download className="mr-2 h-4 w-4" /> 確定申告用データ (.xlsx)
+                                </Button>
+                                <Button onClick={handleDownloadTaxGuide} variant="outline" className="w-full justify-start">
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" /> 耐用年数ガイド (.xlsx)
+                                </Button>
+                                <p className="text-xs text-muted-foreground pl-1">
+                                    主要なメーカー・機種別の詳細リスト（全100機種以上）
                                 </p>
-                            </div>
-                            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${isPro ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
-                                {isPro ? "PRO" : "FREE"}
+                                <Button onClick={handleBackupJson} variant="secondary" className="w-full justify-start">
+                                    <Download className="mr-2 h-4 w-4" /> JSONバックアップ (無料)
+                                </Button>
                             </div>
                         </div>
 
-                        {!isPro && (
-                            <div className="mt-4 flex gap-2">
-                                <Input
-                                    placeholder="ライセンスキーを入力 (例: GEAR-PRO-2026)"
-                                    value={licenseKey}
-                                    onChange={(e) => setLicenseKey(e.target.value)}
-                                    className="max-w-md"
+                        {/* Imports (Pro) */}
+                        <div className="p-4 border rounded-lg space-y-4 bg-card">
+                            <h3 className="font-medium">データ復元</h3>
+                            <p className="text-xs text-muted-foreground">
+                                バックアップファイル(.json)からデータを復元します。<br />
+                                ※同じIDのデータは上書きされます。
+                            </p>
+                            <div className="space-y-2">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    accept=".json"
+                                    onChange={handleImportJson}
+                                    className="hidden"
                                 />
-                                <Button onClick={handleActivate}>有効化</Button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="bg-card p-6 rounded-lg border space-y-6">
-                    <div>
-                        <h2 className="text-lg font-semibold mb-4">データ管理</h2>
-                        <div className="space-y-3">
-                            <div className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                                <div className="flex-1">
-                                    <h3 className="font-medium">Excelエクスポート (.xlsx)</h3>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        現在のインベントリをExcel形式でダウンロードします。
-                                    </p>
-                                </div>
-                                <ProFeature>
-                                    <Button
-                                        onClick={handleExportXlsx}
-                                        disabled={!gears || gears.length === 0}
-                                        variant="outline"
-                                    >
-                                        <Download className="mr-2 h-4 w-4" /> エクスポート
-                                    </Button>
-                                </ProFeature>
-                            </div>
-
-                            <div className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                                <div className="flex-1">
-                                    <h3 className="font-medium">全データをバックアップ (JSON)</h3>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        機材データとログを含む全データをJSONファイルとして保存します。復元時に使用できます。
-                                    </p>
-                                </div>
                                 <Button
-                                    onClick={handleBackupJson}
+                                    onClick={() => fileInputRef.current?.click()}
                                     variant="outline"
-                                    className="ml-4"
+                                    className="w-full justify-start"
                                 >
-                                    <Database className="mr-2 h-4 w-4" />
-                                    バックアップ
+                                    <Upload className="mr-2 h-4 w-4" /> JSONファイルをインポート
                                 </Button>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div className="pt-4 border-t">
-                        <p className="text-xs text-muted-foreground">
-                            💡 ヒント: 定期的なバックアップを推奨します。JSONバックアップは全データを含むため、データ復元に使用できます。
-                        </p>
+                {/* Bug Report & Feedback Section */}
+                <div className="space-y-4 mt-8">
+                    <h2 className="text-xl font-semibold">サポート</h2>
+                    <div className="p-4 border rounded-lg space-y-4 bg-card">
+                        <div>
+                            <h3 className="font-medium mb-2">フィードバック</h3>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                バグの報告や機能のリクエストを送信できます。<br />
+                                お使いの環境情報が自動で入力されます。
+                            </p>
+                        </div>
+                        <Button
+                            variant="outline"
+                            className="w-full sm:w-auto gap-2"
+                            onClick={openBugReportForm}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                                <path d="m8 2 1.88 1.88" />
+                                <path d="M14.12 3.88 16 2" />
+                                <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+                                <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+                                <path d="M12 20v-9" />
+                                <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+                                <path d="M6 13H2" />
+                                <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+                                <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+                                <path d="M22 13h-4" />
+                                <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+                            </svg>
+                            🐛 バグを報告 / 要望を送る
+                        </Button>
                     </div>
                 </div>
             </div>
-        </Layout>
+        </Layout >
     );
 }

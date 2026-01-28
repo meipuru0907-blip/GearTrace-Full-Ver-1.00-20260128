@@ -1,4 +1,4 @@
-export type Language = 'ja' | 'en';
+export type Language = 'ja';
 
 export const translations = {
     ja: {
@@ -58,12 +58,12 @@ export const translations = {
             visualTagOff: "なし"
         },
         detail: {
-            assetDetails: "資産詳細",
+            assetDetails: "機材詳細",
             history: "履歴・ログ",
             noLogs: "ログはまだありません。",
             bookValue: "現在簿価 (推定)",
             straightLine: "定額法償却",
-            originalCost: "取得価額",
+            originalCost: "購入価格",
             depreciationYear: "減価償却費/年",
             fullyDepreciated: "※ 償却完了 (1円備忘価額)",
             loading: "読み込み中..."

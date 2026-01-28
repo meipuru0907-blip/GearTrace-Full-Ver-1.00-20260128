@@ -6,12 +6,10 @@ import { GearListItem } from "@/components/GearListItem";
 import { Layout } from "@/components/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Download, Search, LayoutGrid, AlignJustify, Maximize2, Plus } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Search, LayoutGrid, AlignJustify, Maximize2, Plus, CreditCard, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { utils, write } from "xlsx";
-import { ProFeature } from "@/components/common/ProFeature";
 
 export default function Dashboard() {
     const [search, setSearch] = useState("");
@@ -54,72 +52,83 @@ export default function Dashboard() {
         return uniqueCategories.sort();
     }, []);
 
-    const handleExportXlsx = () => {
-        if (!gears || gears.length === 0) return;
+    // Get subscriptions for cost summary
+    const subscriptions = useLiveQuery(() => db.subscriptions.toArray());
 
-        try {
-            // Japanese Fixed Asset Ledger format
-            const data = gears.map(g => {
-                return {
-                    "資産ID": g.id,
-                    "メーカー": g.manufacturer,
-                    "モデル名": g.model,
-                    "カテゴリー": g.category,
-                    "シリアル番号": g.serialNumber,
-                    "ステータス": g.status,
-                    "取得年月日": g.purchaseDate,
-                    "取得価額": g.purchasePrice,
-                    "耐用年数": g.lifespan
-                };
-            });
-
-            const ws = utils.json_to_sheet(data);
-            const wb = utils.book_new();
-            utils.book_append_sheet(wb, ws, "Assets");
-
-            // Generate filename with current date
-            const today = new Date();
-            const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
-            const filename = `GearTrace_Export_${dateStr}.xlsx`;
-
-            // Write file using Blob for consistent filename handling
-            const wbout = write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([wbout], { type: 'application/octet-stream' });
-
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            toast.success(t('dashboard.syncSuccess'));
-        } catch (err) {
-            console.error(err);
-            toast.error(t('dashboard.syncError'));
-        }
+    // Calculate subscription costs
+    const calculateMonthlyCost = () => {
+        if (!subscriptions) return 0;
+        return subscriptions.reduce((sum, sub) => {
+            const monthlyCost = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
+            return sum + monthlyCost;
+        }, 0);
     };
+
+    // Calculate total asset value
+    const calculateTotalAssetValue = () => {
+        if (!gears) return 0;
+        return gears.reduce((sum, gear) => sum + gear.purchasePrice, 0);
+    };
+
 
     return (
         <Layout>
             <div className="flex flex-col gap-6">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.inventory')}</h1>
-                    <div className="flex gap-2">
-                        <ProFeature>
-                            <Button variant="outline" onClick={handleExportXlsx} disabled={!gears?.length}>
-                                <Download className="mr-2 h-4 w-4" /> {t('dashboard.syncToSheets')}
-                            </Button>
-                        </ProFeature>
-                        <Link to="/add">
-                            <Button>
-                                <Plus className="mr-2 h-4 w-4" />
-                                {t('dashboard.addGear')}
-                            </Button>
-                        </Link>
-                    </div>
+                    <Link to="/add">
+                        <Button>
+                            <Plus className="mr-2 h-4 w-4" />
+                            {t('dashboard.addGear')}
+                        </Button>
+                    </Link>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4" />
+                                総資産価値
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">¥{calculateTotalAssetValue().toLocaleString()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {gears?.length || 0}個の機材
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                <CreditCard className="h-4 w-4" />
+                                月間ランニングコスト
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">¥{Math.round(calculateMonthlyCost()).toLocaleString()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {subscriptions?.length || 0}個のサブスク
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                年間コスト
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">¥{Math.round(calculateMonthlyCost() * 12).toLocaleString()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                サブスク費用（概算）
+                            </p>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div className="flex flex-col gap-4">
@@ -222,6 +231,6 @@ export default function Dashboard() {
                     </>
                 )}
             </div>
-        </Layout>
+        </Layout >
     );
 }
