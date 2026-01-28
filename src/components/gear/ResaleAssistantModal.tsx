@@ -5,7 +5,7 @@ import { X, Copy, FileDown, Info } from "lucide-react";
 import { toast } from "sonner";
 import type { Gear, Log } from "@/types";
 import { generateListingText } from "@/utils/listingGenerator";
-import { generateSalesSheetPDF } from "@/utils/pdfGenerator";
+import { PdfService } from "@/lib/printing/pdf-generator";
 
 interface ResaleAssistantModalProps {
     gear: Gear;
@@ -53,15 +53,7 @@ export function ResaleAssistantModal({ gear, logs, onClose }: ResaleAssistantMod
     const handleDownloadPDF = async () => {
         try {
             toast.info("PDFを生成中...", { duration: 2000 });
-            const pdfBlob = await generateSalesSheetPDF(gear, logs, selectedAccessories);
-            const url = URL.createObjectURL(pdfBlob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `${gear.manufacturer}_${gear.model}_SalesSheet.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            await PdfService.exportResaleSheet(gear, logs, selectedAccessories);
 
             toast.success("販売シート(PDF)をダウンロードしました！");
         } catch (error) {

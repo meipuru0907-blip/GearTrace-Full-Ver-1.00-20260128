@@ -4,6 +4,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { db } from "@/db";
 import { toast } from "sonner";
+import { Package } from "lucide-react";
+import { getStatusOptions } from "@/utils/constants";
 
 interface GearCardProps {
     gear: Gear;
@@ -47,18 +49,27 @@ export function GearCard({ gear, onClick }: GearCardProps) {
                         onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             if (target.src.includes('placeholder.svg')) return;
-                            target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 800 600'%3E%3Crect fill='%23f3f4f6' width='800' height='600'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='48' dy='10.5' font-weight='bold' x='50%25' y='50%25' text-anchor='middle'%3ENo Image%3C/text%3E%3C/svg%3E";
+                            target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 800 600'%3E%3Crect fill='%23f3f4f6' width='800' height='600'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='48' dy='10.5' font-weight='bold' x='50%25' y='50%25' text-anchor='middle'%3E画像なし%3C/text%3E%3C/svg%3E";
                         }}
                     />
                 ) : (
                     <div className="flex h-full items-center justify-center text-muted-foreground">
-                        No Image
+                        画像なし
                     </div>
                 )}
             </div>
             <CardHeader className="p-4">
-                <h3 className="font-semibold leading-none tracking-tight">{gear.manufacturer} {gear.model}</h3>
-                <p className="text-sm text-muted-foreground">{gear.category} {gear.subCategory && `/ ${gear.subCategory}`}</p>
+                <div className="flex justify-between items-start gap-2">
+                    <div>
+                        <h3 className="font-semibold leading-none tracking-tight">{gear.manufacturer} {gear.model}</h3>
+                        <p className="text-sm text-muted-foreground">{gear.category} {gear.subCategory && `/ ${gear.subCategory}`}</p>
+                    </div>
+                    {gear.isContainer && (
+                        <div className="shrink-0" title="コンテナ">
+                            <Package className="h-4 w-4 text-blue-500" />
+                        </div>
+                    )}
+                </div>
             </CardHeader>
             <CardFooter className="p-4 pt-0 text-xs flex flex-col gap-2">
                 <div className="text-muted-foreground flex justify-between w-full">
@@ -71,11 +82,11 @@ export function GearCard({ gear, onClick }: GearCardProps) {
                         disabled={isChangingStatus}
                         className="w-full px-2 py-1 text-xs border rounded-md bg-background hover:bg-accent transition-colors"
                     >
-                        <option value="Available">稼働中</option>
-                        <option value="Maintenance">メンテナンス中</option>
-                        <option value="Repair">修理中</option>
-                        <option value="Broken">故障</option>
-                        <option value="Missing">紛失</option>
+                        {getStatusOptions().map(option => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
                     </select>
                 </div>
             </CardFooter>

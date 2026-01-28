@@ -6,16 +6,20 @@ import { GearListItem } from "@/components/GearListItem";
 import { Layout } from "@/components/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, LayoutGrid, AlignJustify, Maximize2, Plus, CreditCard, TrendingUp } from "lucide-react";
+import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
+import { FinanceAnalysisModal } from "@/components/dashboard/FinanceAnalysisModal";
+import { Search, LayoutGrid, AlignJustify, Maximize2, Plus, CreditCard, TrendingUp, CalendarDays } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getStatusLabel, getAllStatuses } from "@/utils/constants";
 
 export default function Dashboard() {
     const [search, setSearch] = useState("");
     const [viewMode, setViewMode] = useState<'grid' | 'list' | 'large'>('grid');
     const [statusFilter, setStatusFilter] = useState<string>('All');
     const [categoryFilter, setCategoryFilter] = useState<string>('All');
+    const [financeModalOpen, setFinanceModalOpen] = useState(false);
+    const [financeModalTab, setFinanceModalTab] = useState<'assets' | 'costs'>('assets');
     const { t } = useLanguage();
     const navigate = useNavigate();
 
@@ -55,21 +59,6 @@ export default function Dashboard() {
     // Get subscriptions for cost summary
     const subscriptions = useLiveQuery(() => db.subscriptions.toArray());
 
-    // Calculate subscription costs
-    const calculateMonthlyCost = () => {
-        if (!subscriptions) return 0;
-        return subscriptions.reduce((sum, sub) => {
-            const monthlyCost = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
-            return sum + monthlyCost;
-        }, 0);
-    };
-
-    // Calculate total asset value
-    const calculateTotalAssetValue = () => {
-        if (!gears) return 0;
-        return gears.reduce((sum, gear) => sum + gear.purchasePrice, 0);
-    };
-
 
     return (
         <Layout>
@@ -84,51 +73,35 @@ export default function Dashboard() {
                     </Link>
                 </div>
 
-                {/* Summary Cards */}
+                {/* Summary Cards - Interactive */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                <TrendingUp className="h-4 w-4" />
-                                総資産価値
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">¥{calculateTotalAssetValue().toLocaleString()}</div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {gears?.length || 0}個の機材
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <DashboardMetricCard
+                        title="総資産価値"
+                        icon={<TrendingUp className="h-4 w-4" />}
+                        onClick={() => {
+                            setFinanceModalTab('assets');
+                            setFinanceModalOpen(true);
+                        }}
+                        variant="primary"
+                    />
 
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                <CreditCard className="h-4 w-4" />
-                                月間ランニングコスト
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">¥{Math.round(calculateMonthlyCost()).toLocaleString()}</div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {subscriptions?.length || 0}個のサブスク
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <DashboardMetricCard
+                        title="月間ランニングコスト"
+                        icon={<CreditCard className="h-4 w-4" />}
+                        onClick={() => {
+                            setFinanceModalTab('costs');
+                            setFinanceModalOpen(true);
+                        }}
+                    />
 
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                年間コスト
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">¥{Math.round(calculateMonthlyCost() * 12).toLocaleString()}</div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                サブスク費用（概算）
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <DashboardMetricCard
+                        title="年間コスト"
+                        icon={<CalendarDays className="h-4 w-4" />}
+                        onClick={() => {
+                            setFinanceModalTab('costs');
+                            setFinanceModalOpen(true);
+                        }}
+                    />
                 </div>
 
                 <div className="flex flex-col gap-4">
@@ -181,7 +154,15 @@ export default function Dashboard() {
 
                     {/* Status Filter Pills */}
                     <div className="flex gap-2 flex-wrap">
-                        {['All', 'Available', 'Maintenance', 'Repair', 'Broken', 'Missing'].map(status => (
+                        <Button
+                            size="sm"
+                            variant={statusFilter === 'All' ? 'default' : 'outline'}
+                            onClick={() => setStatusFilter('All')}
+                            className="text-xs"
+                        >
+                            全て
+                        </Button>
+                        {getAllStatuses().map(status => (
                             <Button
                                 key={status}
                                 size="sm"
@@ -189,7 +170,7 @@ export default function Dashboard() {
                                 onClick={() => setStatusFilter(status)}
                                 className="text-xs"
                             >
-                                {status === 'All' ? '全て' : t(`status.${status}`)}
+                                {getStatusLabel(status)}
                             </Button>
                         ))}
                     </div>
@@ -230,6 +211,15 @@ export default function Dashboard() {
                         )}
                     </>
                 )}
+
+                {/* Finance Analysis Modal */}
+                <FinanceAnalysisModal
+                    open={financeModalOpen}
+                    onOpenChange={setFinanceModalOpen}
+                    defaultTab={financeModalTab}
+                    gears={gears || []}
+                    subscriptions={subscriptions || []}
+                />
             </div>
         </Layout >
     );

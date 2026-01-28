@@ -80,6 +80,19 @@ export class GearTraceDB extends Dexie {
             packingLists: '++id, name, date, createdAt',
             subscriptions: 'id, category, billingCycle, nextPaymentDate, createdAt'
         });
+
+        // Version 8: Inventory System Upgrade (Phase 44)
+        this.version(8).stores({
+            gear: 'id, category, status, manufacturer, model, purchaseDate, createdAt, isContainer, containerId',
+            logs: 'id, gearId, date, type',
+            packingLists: '++id, name, date, createdAt',
+            subscriptions: 'id, category, billingCycle, nextPaymentDate, createdAt'
+        }).upgrade(trans => {
+            return trans.table('gear').toCollection().modify(gear => {
+                if (typeof gear.quantity === 'undefined') gear.quantity = 1;
+                if (typeof gear.isContainer === 'undefined') gear.isContainer = false;
+            });
+        });
     }
 }
 

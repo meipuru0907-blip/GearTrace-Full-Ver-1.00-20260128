@@ -68,19 +68,12 @@ export const translations = {
             fullyDepreciated: "※ 償却完了 (1円備忘価額)",
             loading: "読み込み中..."
         },
-        status: {
-            Available: "稼働中",
-            InUse: "使用中",
-            Maintenance: "メンテナンス中",
-            Repair: "修理中",
-            Broken: "故障",
-            Missing: "紛失",
-            Sold: "売却済"
-        },
         common: {
             step: "ステップ",
             of: "/",
             years: "年"
         }
+        // Note: status translations have been migrated to src/utils/constants.ts
+        // Use GEAR_STATUS_LABELS for all status display
     }
 };

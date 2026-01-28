@@ -12,12 +12,18 @@ export interface Gear {
         feature?: string; // The "scratch" or identifier
     };
     visualTagColor?: string; // '#FF0000' etc. (for backward compatibility)
-    colorTag?: 'red' | 'blue' | 'green' | 'yellow' | 'pink' | 'orange' | 'purple';
+    colorTag?: string; // HEX color code (e.g., '#ef4444') or empty string for "none"
     status: 'Available' | 'InUse' | 'Maintenance' | 'Broken' | 'Sold' | 'Repair' | 'Missing'; // Required
     purchaseDate: string; // ISO Date
     purchasePrice: number;
     currentValue?: number; // Estimated used price
     lifespan: number; // Depreciation years (default 5)
+
+    // Inventory Management (Phase 44)
+    quantity: number; // Default 1
+    isContainer: boolean; // Is this a container for other gear?
+    containerId?: string; // ID of the parent container
+
     productEra?: string; // e.g. "Released 2015", "1980s Vintage"
     notes?: string; // Additional notes
     createdAt: number; // Timestamp

@@ -14,8 +14,9 @@ interface LabelPrintModalProps {
 export function LabelPrintModal({ gear, onClose }: LabelPrintModalProps) {
     const [isDownloading, setIsDownloading] = useState(false);
 
-    // QR Code: Embed gear ID
-    const qrData = gear.id;
+    // QR Code: Embed full URL for PWA/Browser access
+    // Uses window.location.origin to adapt to dev/prod environments automatically
+    const qrData = `${window.location.origin}/gear/${gear.id}${gear.isContainer ? '?view=contents' : ''}`;
 
     const handlePrint = () => {
         window.print();
@@ -57,15 +58,19 @@ export function LabelPrintModal({ gear, onClose }: LabelPrintModalProps) {
     const handleExportCSV = () => {
         try {
             // CSV data for TEPRA/P-touch software
-            const csvHeader = "Manufacturer,Model,Name,SerialNumber,GearID,QRCodeURL\n";
-            const qrCodeURL = `https://geartrace.app/gear/${gear.id}`; // Placeholder URL
+            const csvHeader = "Manufacturer,Model,Name,SerialNumber,GearID,QRCodeURL,Type\n";
+            const qrCodeURL = gear.isContainer
+                ? `https://geartrace.app/gear/${gear.id}?view=contents`
+                : `https://geartrace.app/gear/${gear.id}`;
+
             const csvRow = [
                 gear.manufacturer,
                 gear.model,
                 gear.name,
                 gear.serialNumber || 'N/A',
                 gear.id,
-                qrCodeURL
+                qrCodeURL,
+                gear.isContainer ? 'Container' : 'Gear'
             ].map(field => `"${field}"`).join(',');
 
             const csvContent = csvHeader + csvRow;
@@ -107,19 +112,27 @@ export function LabelPrintModal({ gear, onClose }: LabelPrintModalProps) {
                         {/* Info Text */}
                         <p className="text-sm text-muted-foreground">
                             24mmテープ想定のラベルプレビューです。印刷またはJPG保存してラベルプリンターで出力できます。
+                            {gear.isContainer && <span className="block text-blue-600 font-medium mt-1">※コンテナモード: QRコードは中身リストへのリンクを含みます。</span>}
                         </p>
 
                         {/* Preview Area - Tape Style (300x90 ratio) */}
                         <div className="flex justify-center">
                             <div
                                 id="label-capture-target"
-                                className="bg-white text-black border-2 border-black flex items-center gap-3"
+                                className="bg-white text-black border-2 border-black flex items-center gap-3 relative overflow-hidden"
                                 style={{
                                     width: '450px',
                                     height: '135px',
                                     padding: '12px'
                                 }}
                             >
+                                {/* Container Marker */}
+                                {gear.isContainer && (
+                                    <div className="absolute right-0 top-0 bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-md z-10">
+                                        CONTENT LIST
+                                    </div>
+                                )}
+
                                 {/* Left: QR Code */}
                                 <div className="flex-shrink-0">
                                     <QRCodeCanvas

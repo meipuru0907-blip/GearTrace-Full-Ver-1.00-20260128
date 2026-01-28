@@ -1,5 +1,7 @@
 import type { Gear } from "@/types";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Package } from "lucide-react";
+import { IdentificationBadge } from "@/components/gear/IdentificationBadge";
+import { SmartStatusBadge } from "@/components/gear/SmartStatusBadge";
 
 interface GearListItemProps {
     gear: Gear;
@@ -21,24 +23,41 @@ export function GearListItem({ gear, onClick }: GearListItemProps) {
                         className="h-full w-full object-cover"
                     />
                 ) : (
-                    <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">No Img</div>
+                    <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">画像なし</div>
                 )}
             </div>
 
             {/* Info */}
-            <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+            <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                {/* Name */}
                 <div className="md:col-span-1">
                     <div className="font-semibold truncate">{gear.manufacturer}</div>
                     <div className="text-sm text-muted-foreground truncate">{gear.model}</div>
                 </div>
 
-                <div className="hidden md:block text-sm text-muted-foreground">
-                    {gear.category}
+                {/* Identification Badge (Color + Serial) */}
+                <div className="hidden md:flex items-center gap-2">
+                    <IdentificationBadge
+                        color={gear.colorTag}
+                        serial={gear.serialNumber}
+                    />
+                    {gear.isContainer && (
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-medium rounded">
+                            <Package className="h-3 w-3" />
+                            コンテナ
+                        </div>
+                    )}
                 </div>
 
-                <div className="hidden md:block text-sm font-mono text-muted-foreground">
-                    SN: {gear.serialNumber || '-'}
+                {/* Category (shown on larger screens) */}
+                <div className="hidden lg:block text-sm text-muted-foreground">
+                    {gear.category}
                 </div>
+            </div>
+
+            {/* Smart Status Badge (Right side) */}
+            <div className="shrink-0">
+                <SmartStatusBadge status={gear.status} />
             </div>
 
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />

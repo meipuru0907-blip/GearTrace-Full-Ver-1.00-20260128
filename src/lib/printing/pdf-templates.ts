@@ -1,30 +1,35 @@
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import type { Gear, Log } from "@/types";
+import type { Gear, Log, PackingList } from "@/types";
 
 /**
  * Format value for display - returns "-" for empty/null values
  */
-function formatValue(value: string | undefined | null): string {
-    if (!value || value.trim() === "" || value === "N/A") {
+function formatValue(value: string | undefined | null | number): string {
+    if (value === undefined || value === null || value === "" || value === "N/A") {
         return "-";
     }
-    return value;
+    return String(value);
 }
 
-/**
- * Create HTML template for sales sheet
- */
-function createSalesSheetHTML(
-    gear: Gear,
-    logs?: Log[],
-    selectedAccessories?: string[]
-): string {
-    const maintenanceLogs = logs?.filter(log =>
-        log.type === "Repair" || log.type === "Maintenance"
-    ) || [];
+const COMMON_STYLES = `
+    font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'メイリオ', Meiryo, sans-serif;
+    color: #333;
+    box-sizing: border-box;
+    width: 794px; /* A4 width at 96dpi (approx) */
+    background: white;
+    padding: 40px;
+    position: relative;
+`;
 
-    const accessoriesHTML = selectedAccessories && selectedAccessories.length > 0
+export function createResaleSheetHTML(
+    gear: Gear,
+    logs: Log[] = [],
+    selectedAccessories: string[] = []
+): string {
+    const maintenanceLogs = logs.filter(log =>
+        log.type === "Repair" || log.type === "Maintenance"
+    );
+
+    const accessoriesHTML = selectedAccessories.length > 0
         ? selectedAccessories.map(item => `
             <div style="display: inline-block; width: 48%; margin: 4px 0;">
                 ✓ ${item}
@@ -43,33 +48,21 @@ function createSalesSheetHTML(
         `).join('')
         : '<tr><td colspan="4" style="padding: 12px; color: #999; text-align: center; font-style: italic;">メンテナンス履歴がありません</td></tr>';
 
-    // Photo sections
-    const photoStyle = "width: 100%; height: 200px; border-radius: 8px; border: 2px solid #e5e7eb;";
+    const photoStyle = "width: 100%; height: 200px; border-radius: 8px; border: 2px solid #e5e7eb; object-fit: cover;";
     const placeholderStyle = "display: flex; align-items: center; justify-content: center; background: #f3f4f6; color: #9ca3af; font-size: 14px;";
 
-    const heroPhotoHTML = gear.photos?.hero
-        ? `<img src="${gear.photos.hero}" style="${photoStyle} object-fit: cover;" alt="Hero Photo" />`
-        : `<div style="${photoStyle} ${placeholderStyle}">📷 写真を追加</div>`;
-
-    const serialPhotoHTML = gear.photos?.serial
-        ? `<img src="${gear.photos.serial}" style="${photoStyle} object-fit: cover;" alt="Serial Photo" />`
-        : `<div style="${photoStyle} ${placeholderStyle}">📷 写真を追加</div>`;
-
-    const featurePhotoHTML = gear.photos?.feature
-        ? `<img src="${gear.photos.feature}" style="${photoStyle} object-fit: cover;" alt="Feature Photo" />`
-        : `<div style="${photoStyle} ${placeholderStyle}">📷 写真を追加</div>`;
+    const getPhotoHTML = (src?: string, label?: string) => `
+        <div>
+            <div style="font-size: 11px; margin-bottom: 4px; color: #6b7280; font-weight: 600;">${label}</div>
+            ${src
+            ? `<img src="${src}" style="${photoStyle}" alt="${label}" />`
+            : `<div style="${photoStyle} ${placeholderStyle}">No Photo</div>`
+        }
+        </div>
+    `;
 
     return `
-        <div style="
-            width: 794px;
-            height: 1123px;
-            background: white;
-            padding: 40px;
-            font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'メイリオ', Meiryo, sans-serif;
-            color: #333;
-            box-sizing: border-box;
-            position: relative;
-        ">
+        <div style="${COMMON_STYLES} height: 1123px;">
             <!-- Header -->
             <div style="border-bottom: 3px solid #2563eb; padding-bottom: 16px; margin-bottom: 20px;">
                 <h1 style="margin: 0; font-size: 28px; font-weight: bold; color: #1e40af;">
@@ -80,35 +73,25 @@ function createSalesSheetHTML(
                 </p>
             </div>
 
-            <!-- Product Name -->
             <div style="margin-bottom: 16px;">
                 <h2 style="margin: 0; font-size: 22px; font-weight: bold; color: #1f2937;">
                     ${gear.manufacturer} ${gear.model}
                 </h2>
             </div>
 
-            <!-- Photos Section -->
+            <!-- Photos -->
             <div style="margin-bottom: 20px;">
                 <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold; color: #374151; border-left: 4px solid #ec4899; padding-left: 12px;">
                     写真
                 </h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-                    <div>
-                        <div style="font-size: 11px; margin-bottom: 4px; color: #6b7280; font-weight: 600;">メイン写真</div>
-                        ${heroPhotoHTML}
-                    </div>
-                    <div>
-                        <div style="font-size: 11px; margin-bottom: 4px; color: #6b7280; font-weight: 600;">シリアル番号</div>
-                        ${serialPhotoHTML}
-                    </div>
-                    <div>
-                        <div style="font-size: 11px; margin-bottom: 4px; color: #6b7280; font-weight: 600;">特徴/傷</div>
-                        ${featurePhotoHTML}
-                    </div>
+                    ${getPhotoHTML(gear.photos?.hero, 'メイン写真')}
+                    ${getPhotoHTML(gear.photos?.serial, 'シリアル番号')}
+                    ${getPhotoHTML(gear.photos?.feature, '特徴/傷')}
                 </div>
             </div>
 
-            <!-- Specs Table -->
+            <!-- Specs -->
             <div style="margin-bottom: 20px;">
                 <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold; color: #374151; border-left: 4px solid #3b82f6; padding-left: 12px;">
                     基本仕様
@@ -137,7 +120,7 @@ function createSalesSheetHTML(
                 </table>
             </div>
 
-            <!-- Maintenance History -->
+            <!-- Maintenance -->
             <div style="margin-bottom: 20px;">
                 <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold; color: #374151; border-left: 4px solid #10b981; padding-left: 12px;">
                     メンテナンス履歴
@@ -163,62 +146,75 @@ function createSalesSheetHTML(
                 </div>
             </div>
 
-            <!-- Footer -->
-            <div style="position: absolute; bottom: 30px; left: 40px; right: 40px; padding-top: 12px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 10px;">
-                このドキュメントは GearTrace により生成されました - プロフェッショナル機材管理システム
+             <div style="position: absolute; bottom: 30px; left: 40px; right: 40px; text-align: center; color: #9ca3af; font-size: 10px;">
+                Generated by GearTrace
             </div>
         </div>
     `;
 }
 
-/**
- * Generate professional A4 sales sheet PDF using html2canvas
- * This method renders HTML as an image to avoid Japanese font issues
- */
-export async function generateSalesSheetPDF(
-    gear: Gear,
-    logs?: Log[],
-    selectedAccessories?: string[]
-): Promise<Blob> {
-    // Create temporary container
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    document.body.appendChild(container);
+export function createPackingListHTML(
+    list: PackingList,
+    items: { gear: Gear; count: number }[]
+): string {
+    const itemsHTML = items.map((item, index) => {
+        const { gear, count } = item;
+        return `
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+                <td style="padding: 10px; text-align: center; color: #6b7280;">${index + 1}</td>
+                <td style="padding: 10px;">
+                    <div style="font-weight: bold; color: #1f2937;">${gear.manufacturer} ${gear.model}</div>
+                    <div style="font-size: 11px; color: #6b7280;">${gear.category} ${gear.serialNumber ? `(S/N: ${gear.serialNumber})` : ''}</div>
+                </td>
+                <td style="padding: 10px; text-align: center;">
+                    <span style="display: inline-block; background: #f3f4f6; padding: 2px 8px; border-radius: 12px; font-weight: bold; font-size: 12px;">
+                        ${count}
+                    </span>
+                </td>
+                <td style="padding: 10px;">
+                    <div style="width: 16px; height: 16px; border: 2px solid #d1d5db; border-radius: 4px; margin: 0 auto;"></div>
+                </td>
+            </tr>
+        `;
+    }).join("");
 
-    try {
-        // Set HTML content
-        container.innerHTML = createSalesSheetHTML(gear, logs, selectedAccessories);
+    return `
+        <div style="${COMMON_STYLES} min-height: 1123px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #000; padding-bottom: 16px; margin-bottom: 30px;">
+                <div>
+                    <h1 style="margin: 0; font-size: 32px; font-weight: bold; letter-spacing: -0.5px;">PACKING LIST</h1>
+                    <div style="margin-top: 8px; font-size: 18px; color: #4b5563;">${list.name}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 14px; color: #6b7280;">DATE</div>
+                    <div style="font-size: 18px; font-weight: bold;">${list.date}</div>
+                </div>
+            </div>
 
-        // Wait for fonts to load
-        await document.fonts.ready;
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+                        <th style="padding: 10px; width: 40px; text-align: center; color: #6b7280;">#</th>
+                        <th style="padding: 10px; text-align: left; color: #6b7280;">ITEM</th>
+                        <th style="padding: 10px; width: 60px; text-align: center; color: #6b7280;">QTY</th>
+                        <th style="padding: 10px; width: 40px; text-align: center; color: #6b7280;">CHK</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHTML}
+                </tbody>
+            </table>
 
-        // Capture as canvas
-        const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            allowTaint: true
-        });
+            <div style="margin-top: 40px; border-top: 1px dotted #ccc; padding-top: 10px;">
+                <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold; color: #6b7280;">NOTES</h3>
+                <div style="min-height: 100px; background: #f9fafb; border-radius: 6px; padding: 12px; font-size: 12px; color: #333;">
+                    <!-- Notes placeholder -->
+                </div>
+            </div>
 
-        // Create PDF (A4 size: 210mm x 297mm)
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4'
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdfWidth = 210;
-        const pdfHeight = 297;
-
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-
-        return pdf.output('blob');
-    } finally {
-        // Clean up
-        document.body.removeChild(container);
-    }
+             <div style="position: absolute; bottom: 30px; left: 40px; right: 40px; text-align: center; color: #9ca3af; font-size: 10px;">
+                Generated by GearTrace
+            </div>
+        </div>
+    `;
 }
