@@ -108,3 +108,10 @@
 *   **CRUD機能の実装**: 機材の追加・更新・削除ロジックの確立。
 *   **プロジェクト・支出管理**: 案件ごとの収支管理機能（現在はGearTraceのメイン機能からは分離、または統合中）。
 *   **初期セットアップ**: React + TypeScript + Tailwind CSSのプロジェクト構成。
+
+### Code Refactoring & Deduplication (2026-01-30)
+*   **コードベースの整理**:
+    *   `StatusBadge.tsx` を削除し、より機能的な `SmartStatusBadge.tsx` に統一。
+    *   未使用のデッドコード（`exportAllGear` 等）を削除し、メンテナンス性を向上。
+    *   Supabase移行に伴い不要となった古いDBコード（`src/db`）を完全に削除。
+    *   `package.json` の不要な依存関係（Dexie等）を削除。
