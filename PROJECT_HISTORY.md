@@ -115,3 +115,7 @@
     *   未使用のデッドコード（`exportAllGear` 等）を削除し、メンテナンス性を向上。
     *   Supabase移行に伴い不要となった古いDBコード（`src/db`）を完全に削除。
     *   `package.json` の不要な依存関係（Dexie等）を削除。
+
+### AI Summary Test (2026-01-30)
+*   **テスト機能の追加**:
+    *   `src/utils/dummyTestFeature.ts`: 「何の機能もない機能」として、何もしないテスト用関数を追加しました。これはAIがコードを要約する能力を検証するためのものです。
