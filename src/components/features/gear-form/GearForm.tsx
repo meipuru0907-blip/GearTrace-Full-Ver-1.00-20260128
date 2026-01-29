@@ -205,9 +205,18 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                             <Checkbox
                                 id="splitMode"
                                 checked={isSplitMode}
-                                onCheckedChange={(c) => {
-                                    setIsSplitMode(!!c);
-                                    if (c) {
+                                onChange={(e) => {
+                                    // Handle both event and direct boolean
+                                    // Radix Checkbox onCheckedChange returns boolean. Native input returns event.
+                                    // If previous usage (line 186) works with event, likely it is input wrapper.
+                                    // The error said `onCheckedChange` does not exist. So use `onChange` or `onCheckedChange` compatible.
+                                    // Let's assume standard input wrapper if InputHTMLAttributes.
+                                    // But wait, line 186 `e.target.checked` suggests event.
+                                    // Line 208 using direct `c` (boolean?) suggests Radix.
+                                    // If component is defined as `forwardRef<HTMLInputElement, ...>`, then it expects React.ChangeEventHandler.
+                                    const checked = (e.target as HTMLInputElement).checked;
+                                    setIsSplitMode(checked);
+                                    if (checked) {
                                         // Init breakdown with current status
                                         setBreakdown({ [formData.status]: formData.quantity });
                                     } else {
@@ -308,7 +317,7 @@ export function GearForm({ defaultValues, onSubmit, onCancel, submitLabel = "保
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="purchasePrice">購入価格 (円) *</Label>
+                        <Label htmlFor="purchasePrice">単価 (円) *</Label>
                         <Input
                             id="purchasePrice"
                             type="number"

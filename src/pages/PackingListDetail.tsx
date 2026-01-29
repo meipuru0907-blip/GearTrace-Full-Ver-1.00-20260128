@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db";
+import { usePackingListDetail } from "@/hooks/usePackingListDetail";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,14 +19,7 @@ export default function PackingListDetail() {
     const [editingContainer, setEditingContainer] = useState<Gear | null>(null);
     const [printingLabelContainer, setPrintingLabelContainer] = useState<Gear | null>(null);
 
-    const list = useLiveQuery(async () => {
-        if (!id) return null;
-        return await db.packingLists.get(Number(id));
-    }, [id]);
-
-    const numericId = Number(id);
-
-    const gearList = useLiveQuery(() => db.gear.orderBy('category').toArray());
+    const { list, allGear: gearList, loading, updateList, deleteList } = usePackingListDetail(id);
 
     // Helper to count quantities in the list
     const getGearCounts = (gearIds: string[] = []) => {
@@ -85,8 +77,6 @@ export default function PackingListDetail() {
             const available = (item.quantity || 1) - currentCountInList;
 
             if (available > 0) {
-                // Add as many as possible/needed. Here just add 1 for "unpacking" action
-                // Or should we add ALL inventory of that item? Usually 1 set.
                 newGearIds.push(item.id);
                 addedCount++;
             }
@@ -100,18 +90,16 @@ export default function PackingListDetail() {
         }
     };
 
-    const updateList = async (gearIds: string[]) => {
-        await db.packingLists.update(numericId, {
-            gearIds,
-            updatedAt: Date.now()
-        });
-    };
-
     const handleDelete = async () => {
         if (!confirm("本当に削除しますか？")) return;
-        await db.packingLists.delete(numericId);
-        toast.success("リストを削除しました");
-        navigate("/packing-lists");
+        try {
+            await deleteList();
+            toast.success("リストを削除しました");
+            navigate("/packing-lists");
+        } catch (error) {
+            console.error(error);
+            toast.error("削除に失敗しました");
+        }
     };
 
     const handlePrint = async () => {
@@ -139,7 +127,9 @@ export default function PackingListDetail() {
         g.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())
     ) || [];
 
-    if (!list) return <Layout><div className="p-8">Loading...</div></Layout>;
+    if (loading) return <Layout><div className="flex items-center justify-center p-8">Loading...</div></Layout>;
+
+    if (!list) return <Layout><div className="p-8">Packing List not found</div></Layout>;
 
     const totalItems = list.gearIds?.length || 0;
 

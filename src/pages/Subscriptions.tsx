@@ -1,5 +1,4 @@
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db";
+import { useSubscriptions } from "@/hooks/useSubscriptions";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export default function Subscriptions() {
-    const subscriptions = useLiveQuery(() => db.subscriptions.toArray());
+    const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription } = useSubscriptions();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
 
@@ -143,7 +142,7 @@ export default function Subscriptions() {
         try {
             if (editingSubscription) {
                 // Update existing
-                await db.subscriptions.update(editingSubscription.id, {
+                await updateSubscription(editingSubscription.id, {
                     name: formData.name,
                     category: formData.category as SubscriptionCategory,
                     price: price,
@@ -151,14 +150,12 @@ export default function Subscriptions() {
                     startDate: formData.startDate,
                     nextPaymentDate: formData.nextPaymentDate,
                     autoRenew: formData.autoRenew,
-                    notes: formData.notes,
-                    updatedAt: Date.now()
+                    notes: formData.notes
                 });
                 toast.success("サブスクリプションを更新しました");
             } else {
                 // Create new
-                const newSubscription: Subscription = {
-                    id: crypto.randomUUID(),
+                await addSubscription({
                     name: formData.name,
                     category: formData.category as SubscriptionCategory,
                     price: price,
@@ -166,11 +163,8 @@ export default function Subscriptions() {
                     startDate: formData.startDate,
                     nextPaymentDate: formData.nextPaymentDate,
                     autoRenew: formData.autoRenew,
-                    notes: formData.notes,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                };
-                await db.subscriptions.add(newSubscription);
+                    notes: formData.notes
+                });
                 toast.success("サブスクリプションを追加しました");
             }
             handleCloseDialog();
@@ -186,7 +180,7 @@ export default function Subscriptions() {
         }
 
         try {
-            await db.subscriptions.delete(id);
+            await deleteSubscription(id);
             toast.success("削除しました");
         } catch (error) {
             console.error(error);
@@ -262,7 +256,11 @@ export default function Subscriptions() {
                 </div>
 
                 {/* Subscriptions List */}
-                {subscriptions && subscriptions.length > 0 ? (
+                {loading ? (
+                    <div className="flex justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                ) : subscriptions && subscriptions.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {subscriptions.map((sub) => {
                             const Icon = getCategoryIcon(sub.category);

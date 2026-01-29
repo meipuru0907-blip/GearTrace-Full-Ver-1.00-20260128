@@ -4,15 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { db } from "@/db";
+import { supabase } from "@/lib/supabase";
 import type { Log } from "@/types";
 
 interface GearHistoryProps {
     gearId: string;
     logs: Log[] | undefined;
+    onUpdate?: () => void;
 }
 
-export function GearHistory({ gearId, logs }: GearHistoryProps) {
+export function GearHistory({ gearId, logs, onUpdate }: GearHistoryProps) {
     const [showLogDialog, setShowLogDialog] = useState(false);
     const [newLog, setNewLog] = useState<Partial<Log>>({
         date: new Date().toISOString().split('T')[0],
@@ -28,14 +29,15 @@ export function GearHistory({ gearId, logs }: GearHistoryProps) {
         }
 
         try {
-            await db.logs.add({
-                id: crypto.randomUUID(),
-                gearId: gearId,
-                date: newLog.date!,
-                type: newLog.type as 'Trouble' | 'Repair' | 'Maintenance' | 'Lending',
+            const { error } = await supabase.from('logs').insert({
+                gear_id: gearId,
+                date: newLog.date,
+                type: newLog.type,
                 description: newLog.description,
                 cost: newLog.cost || 0
             });
+
+            if (error) throw error;
 
             toast.success("ログを追加しました！");
             setShowLogDialog(false);
@@ -45,6 +47,8 @@ export function GearHistory({ gearId, logs }: GearHistoryProps) {
                 description: '',
                 cost: 0
             });
+
+            if (onUpdate) onUpdate();
         } catch (error) {
             console.error(error);
             toast.error("ログの追加に失敗しました。");

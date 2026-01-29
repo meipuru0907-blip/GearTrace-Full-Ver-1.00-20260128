@@ -2,14 +2,15 @@ import { useState, useRef } from "react";
 import { Camera } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { db } from "@/db";
+import { supabase } from "@/lib/supabase";
 import type { Gear } from "@/types";
 
 interface GearPhotoSectionProps {
     gear: Gear;
+    onUpdate?: () => void;
 }
 
-export function GearPhotoSection({ gear }: GearPhotoSectionProps) {
+export function GearPhotoSection({ gear, onUpdate }: GearPhotoSectionProps) {
     const [selectedPhoto, setSelectedPhoto] = useState<'hero' | 'serial' | 'feature'>('hero');
     const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -24,12 +25,19 @@ export function GearPhotoSection({ gear }: GearPhotoSectionProps) {
         reader.onload = async (e) => {
             const base64 = e.target?.result as string;
             try {
-                // @ts-ignore
-                const updates: any = { updatedAt: Date.now() };
-                updates[`photos.${type}`] = base64;
+                // Construct new photos object
+                const currentPhotos = gear.photos || { hero: '', serial: '', feature: '' };
+                const newPhotos = { ...currentPhotos, [type]: base64 };
 
-                await db.gear.update(gear.id, updates);
+                const { error } = await supabase.from('gear').update({
+                    photos: newPhotos,
+                    updated_at: new Date().toISOString()
+                }).eq('id', gear.id);
+
+                if (error) throw error;
+
                 toast.success("写真をアップロードしました！");
+                if (onUpdate) onUpdate();
             } catch (error) {
                 console.error(error);
                 toast.error("アップロードに失敗しました。");

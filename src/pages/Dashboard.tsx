@@ -1,6 +1,6 @@
-import { useLiveQuery } from "dexie-react-hooks";
+import { useGear } from "@/hooks/useGear";
+import { useSubscriptions } from "@/hooks/useSubscriptions";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { db } from "@/db";
 import { GearCard } from "@/components/GearCard";
 import { GearListItem } from "@/components/GearListItem";
 import { Layout } from "@/components/Layout";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
 import { FinanceAnalysisModal } from "@/components/dashboard/FinanceAnalysisModal";
 import { Search, LayoutGrid, AlignJustify, Maximize2, Plus, CreditCard, TrendingUp, CalendarDays } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getStatusLabel, getAllStatuses } from "@/utils/constants";
 
@@ -23,9 +23,19 @@ export default function Dashboard() {
     const { t } = useLanguage();
     const navigate = useNavigate();
 
-    const gears = useLiveQuery(async () => {
-        let collection = db.gear.orderBy('createdAt').reverse();
-        let results = await collection.toArray();
+    const { gears, loading: gearsLoading, refresh } = useGear();
+    const { subscriptions } = useSubscriptions();
+
+    // Get unique categories for filter dropdown
+    const categories = useMemo(() => {
+        if (!gears) return [];
+        const uniqueCategories = [...new Set(gears.map(g => g.category))];
+        return uniqueCategories.sort();
+    }, [gears]);
+
+    const filteredGears = useMemo(() => {
+        if (!gears) return [];
+        let results = [...gears];
 
         // Apply search filter
         if (search) {
@@ -47,18 +57,31 @@ export default function Dashboard() {
         }
 
         return results;
-    }, [search, statusFilter, categoryFilter]);
+    }, [gears, search, statusFilter, categoryFilter]);
 
-    // Get unique categories for filter dropdown
-    const categories = useLiveQuery(async () => {
-        const allGears = await db.gear.toArray();
-        const uniqueCategories = [...new Set(allGears.map(g => g.category))];
-        return uniqueCategories.sort();
-    }, []);
 
-    // Get subscriptions for cost summary
-    const subscriptions = useLiveQuery(() => db.subscriptions.toArray());
 
+    // Calculate Financial Metrics
+    const totalAssetValue = useMemo(() => {
+        if (!gears) return 0;
+        return gears.reduce((sum, g) => sum + (g.purchasePrice * g.quantity), 0);
+    }, [gears]);
+
+    const totalMonthlyCost = useMemo(() => {
+        if (!subscriptions) return 0;
+        return subscriptions.reduce((sum, sub) => {
+            const monthly = sub.billingCycle === 'monthly' ? sub.price : sub.price / 12;
+            return sum + monthly;
+        }, 0);
+    }, [subscriptions]);
+
+    const totalYearlyCost = useMemo(() => {
+        if (!subscriptions) return 0;
+        return subscriptions.reduce((sum, sub) => {
+            const yearly = sub.billingCycle === 'yearly' ? sub.price : sub.price * 12;
+            return sum + yearly;
+        }, 0);
+    }, [subscriptions]);
 
     return (
         <Layout>
@@ -77,6 +100,8 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <DashboardMetricCard
                         title="総資産価値"
+                        value={`¥${totalAssetValue.toLocaleString()}`}
+                        subValue={`${gears?.length || 0} アイテム`}
                         icon={<TrendingUp className="h-4 w-4" />}
                         onClick={() => {
                             setFinanceModalTab('assets');
@@ -87,6 +112,8 @@ export default function Dashboard() {
 
                     <DashboardMetricCard
                         title="月間ランニングコスト"
+                        value={`¥${Math.round(totalMonthlyCost).toLocaleString()}`}
+                        subValue="サブスクリプション概算"
                         icon={<CreditCard className="h-4 w-4" />}
                         onClick={() => {
                             setFinanceModalTab('costs');
@@ -96,6 +123,8 @@ export default function Dashboard() {
 
                     <DashboardMetricCard
                         title="年間コスト"
+                        value={`¥${Math.round(totalYearlyCost).toLocaleString()}`}
+                        subValue="年額換算"
                         icon={<CalendarDays className="h-4 w-4" />}
                         onClick={() => {
                             setFinanceModalTab('costs');
@@ -176,7 +205,11 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {gears && gears.length === 0 ? (
+                {gearsLoading ? (
+                    <div className="flex justify-center items-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                ) : filteredGears.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border-2 border-dashed rounded-lg">
                         <h3 className="text-lg font-semibold">{t('dashboard.noGearFound')}</h3>
                         <p className="mb-4">{t('dashboard.startAdding')}</p>
@@ -188,7 +221,7 @@ export default function Dashboard() {
                     <>
                         {viewMode === 'list' && (
                             <div className="flex flex-col gap-2">
-                                {gears?.map((gear) => (
+                                {filteredGears.map((gear) => (
                                     <GearListItem key={gear.id} gear={gear} onClick={() => navigate(`/gear/${gear.id}`)} />
                                 ))}
                             </div>
@@ -196,16 +229,16 @@ export default function Dashboard() {
 
                         {viewMode === 'grid' && (
                             <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                                {gears?.map((gear) => (
-                                    <GearCard key={gear.id} gear={gear} onClick={() => navigate(`/gear/${gear.id}`)} />
+                                {filteredGears.map((gear) => (
+                                    <GearCard key={gear.id} gear={gear} onClick={() => navigate(`/gear/${gear.id}`)} onUpdate={refresh} />
                                 ))}
                             </div>
                         )}
 
                         {viewMode === 'large' && (
                             <div className="grid gap-6 md:grid-cols-2">
-                                {gears?.map((gear) => (
-                                    <GearCard key={gear.id} gear={gear} onClick={() => navigate(`/gear/${gear.id}`)} />
+                                {filteredGears.map((gear) => (
+                                    <GearCard key={gear.id} gear={gear} onClick={() => navigate(`/gear/${gear.id}`)} onUpdate={refresh} />
                                 ))}
                             </div>
                         )}
@@ -217,7 +250,7 @@ export default function Dashboard() {
                     open={financeModalOpen}
                     onOpenChange={setFinanceModalOpen}
                     defaultTab={financeModalTab}
-                    gears={gears || []}
+                    gears={filteredGears}
                     subscriptions={subscriptions || []}
                 />
             </div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Gear } from "@/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
-import { db } from "@/db";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Package } from "lucide-react";
 import { getStatusOptions } from "@/utils/constants";
@@ -10,9 +10,10 @@ import { getStatusOptions } from "@/utils/constants";
 interface GearCardProps {
     gear: Gear;
     onClick?: () => void;
+    onUpdate?: () => void;
 }
 
-export function GearCard({ gear, onClick }: GearCardProps) {
+export function GearCard({ gear, onClick, onUpdate }: GearCardProps) {
     const { t } = useLanguage();
     const [isChangingStatus, setIsChangingStatus] = useState(false);
 
@@ -22,11 +23,15 @@ export function GearCard({ gear, onClick }: GearCardProps) {
         setIsChangingStatus(true);
 
         try {
-            await db.gear.update(gear.id, {
-                status: newStatus as any,
-                updatedAt: Date.now()
-            });
+            const { error } = await supabase.from('gear').update({
+                status: newStatus,
+                updated_at: new Date().toISOString()
+            }).eq('id', gear.id);
+
+            if (error) throw error;
+
             toast.success("ステータスを更新しました！");
+            if (onUpdate) onUpdate();
         } catch (error) {
             console.error(error);
             toast.error("ステータスの更新に失敗しました。");

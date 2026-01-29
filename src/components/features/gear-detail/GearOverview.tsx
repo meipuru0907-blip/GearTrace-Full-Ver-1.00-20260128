@@ -5,10 +5,10 @@ import { DepreciationCompactCard } from "@/components/gear/DepreciationCompactCa
 import { DepreciationModal } from "@/components/gear/DepreciationModal";
 import { ModelResearchButton } from "@/components/gear/ModelResearchButton";
 import { MarketLinks } from "@/components/gear/MarketLinks";
-import { toast } from "sonner";
 import type { Gear } from "@/types";
-import { PdfService } from "@/lib/printing/pdf-generator";
 import { useState } from "react";
+
+import { ResaleAssistantModal } from "@/components/gear/ResaleAssistantModal";
 
 interface GearOverviewProps {
     gear: Gear;
@@ -16,15 +16,7 @@ interface GearOverviewProps {
 
 export function GearOverview({ gear }: GearOverviewProps) {
     const [depreciationModalOpen, setDepreciationModalOpen] = useState(false);
-
-    const handleGeneratePDF = async () => {
-        try {
-            await PdfService.exportResaleSheet(gear, [], []); // logs and accessories can be passed if we fetch them properly or use props
-            toast.success("売却シートを作成しました！");
-        } catch (error) {
-            toast.error("PDF作成に失敗しました");
-        }
-    };
+    const [resaleModalOpen, setResaleModalOpen] = useState(false);
 
     return (
         <div className="space-y-4 mt-4">
@@ -89,7 +81,7 @@ export function GearOverview({ gear }: GearOverviewProps) {
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        onClick={handleGeneratePDF}
+                        onClick={() => setResaleModalOpen(true)}
                     >
                         <FileText className="h-4 w-4 mr-2" />
                         売却シート作成
@@ -118,6 +110,13 @@ export function GearOverview({ gear }: GearOverviewProps) {
                 open={depreciationModalOpen}
                 onOpenChange={setDepreciationModalOpen}
             />
+
+            {resaleModalOpen && (
+                <ResaleAssistantModal
+                    gear={gear}
+                    onClose={() => setResaleModalOpen(false)}
+                />
+            )}
         </div>
     );
 }

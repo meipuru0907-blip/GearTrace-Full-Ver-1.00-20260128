@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Plus, ListChecks, Calendar } from "lucide-react";
-import { db } from "@/db";
-import { useLiveQuery } from "dexie-react-hooks";
+import { usePackingLists } from "@/hooks/usePackingLists";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import {
@@ -19,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export default function PackingLists() {
-    const packingLists = useLiveQuery(() => db.packingLists.orderBy('createdAt').reverse().toArray());
+    const { packingLists, createPackingList, loading } = usePackingLists();
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
     const [name, setName] = useState("");
@@ -32,13 +31,7 @@ export default function PackingLists() {
         }
 
         try {
-            const id = await db.packingLists.add({
-                name,
-                date,
-                gearIds: [],
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            } as any);
+            const id = await createPackingList(name, date);
             toast.success("リストを作成しました");
             setOpen(false);
             setName("");
@@ -94,7 +87,11 @@ export default function PackingLists() {
                     </Dialog>
                 </div>
 
-                {packingLists && packingLists.length > 0 ? (
+                {loading ? (
+                    <div className="flex justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                ) : packingLists && packingLists.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {packingLists.map(list => (
                             <div

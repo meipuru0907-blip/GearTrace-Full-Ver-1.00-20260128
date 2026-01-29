@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db";
+import { useGearDetail } from "@/hooks/useGearDetail";
 import { Layout } from "@/components/Layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -22,31 +21,13 @@ export default function GearDetail() {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isLabelOpen, setIsLabelOpen] = useState(false);
 
-    // Main Gear Data
-    const gear = useLiveQuery(() => {
-        return id ? db.gear.get(id) : undefined;
-    }, [id]);
-
-    // Related Data Queries
-    const logs = useLiveQuery(() => {
-        return id ? db.logs.where('gearId').equals(id).reverse().sortBy('date') : [];
-    }, [id]);
-
-    const contents = useLiveQuery(() => {
-        return id ? db.gear.where('containerId').equals(id).toArray() : [];
-    }, [id]);
-
-    const parentContainer = useLiveQuery(async () => {
-        if (!gear?.containerId) return null;
-        return db.gear.get(gear.containerId);
-    }, [gear?.containerId]);
+    const { gear, logs, contents, parentContainer, loading, deleteGear, refresh } = useGearDetail(id);
 
     const handleDelete = async () => {
         if (!id || !confirm("本当にこの機材を削除しますか？")) return;
 
         try {
-            await db.gear.delete(id);
-            await db.logs.where('gearId').equals(id).delete();
+            await deleteGear();
             toast.success("機材を削除しました。");
             navigate('/');
         } catch (error) {
@@ -55,8 +36,12 @@ export default function GearDetail() {
         }
     };
 
-    if (!gear) {
+    if (loading) {
         return <Layout><div className="flex items-center justify-center h-96">Loading...</div></Layout>;
+    }
+
+    if (!gear) {
+        return <Layout><div className="flex items-center justify-center h-96">Gear not found</div></Layout>;
     }
 
     return (
@@ -73,7 +58,7 @@ export default function GearDetail() {
                 <div className="grid grid-cols-1 lg:grid-cols-[35%_65%] gap-6">
 
                     {/* Left Column: Photos */}
-                    <GearPhotoSection gear={gear} />
+                    <GearPhotoSection gear={gear} onUpdate={refresh} />
 
                     {/* Right Column: Data Tabs */}
                     <div>
@@ -94,11 +79,11 @@ export default function GearDetail() {
                             </TabsContent>
 
                             <TabsContent value="history">
-                                <GearHistory gearId={gear.id} logs={logs} />
+                                <GearHistory gearId={gear.id} logs={logs} onUpdate={refresh} />
                             </TabsContent>
 
                             <TabsContent value="documents">
-                                <GearDocuments gear={gear} />
+                                <GearDocuments gear={gear} onUpdate={refresh} />
                             </TabsContent>
                         </Tabs>
                     </div>
@@ -110,7 +95,10 @@ export default function GearDetail() {
                 <EditGearModal
                     gear={gear}
                     onClose={() => setIsEditOpen(false)}
-                    onUpdate={() => setIsEditOpen(false)}
+                    onUpdate={() => {
+                        setIsEditOpen(false);
+                        refresh();
+                    }}
                 />
             )}
             {isLabelOpen && (

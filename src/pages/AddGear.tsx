@@ -6,14 +6,15 @@ import { PhotoUploader } from "@/components/PhotoUploader";
 import { ColorTagger } from "@/components/ColorTagger";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { db } from "@/db";
-import type { Gear } from "@/types";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import { ChevronRight } from "lucide-react";
 import { GearForm, type GearFormValues } from "@/components/features/gear-form/GearForm";
 
 export default function AddGear() {
     const { t } = useLanguage();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [step, setStep] = useState<1 | 2>(1);
     const [photos, setPhotos] = useState<{ hero?: string, serial?: string, feature?: string }>({});
     const [tempVisualTag, setTempVisualTag] = useState<string>('');
@@ -36,26 +37,43 @@ export default function AddGear() {
             return;
         }
 
+        if (!user) {
+            toast.error("ログインが必要です");
+            return;
+        }
+
         try {
-            const now = Date.now();
-            const newGear: Gear = {
-                id: crypto.randomUUID(),
-                ...values,
-                // Merge photo/tag data from Step 1
+
+
+            // Map to Supabase snake_case
+            const { error } = await supabase.from('gear').insert({
+                name: values.name,
+                category: values.category,
+                manufacturer: values.manufacturer,
+                model: values.model,
+                serial_number: values.serialNumber,
+                // photos is likely a JSONB column or similar
                 photos: {
                     hero: photos.hero || '',
                     serial: photos.serial,
                     feature: photos.feature
                 },
-                // If form didn't set a color tag but step 1 did (legacy visual tag), use it
-                visualTagColor: tempVisualTag, // Keep for legacy if needed, or mapping
-                colorTag: (values.colorTag || (tempVisualTag ? tempVisualTag : undefined)) as Gear['colorTag'],
+                visual_tag_color: tempVisualTag,
+                color_tag: (values.colorTag || (tempVisualTag ? tempVisualTag : undefined)),
+                purchase_price: values.purchasePrice,
+                status: values.status,
+                is_container: values.isContainer,
+                container_id: values.containerId,
+                notes: values.notes,
+                quantity: values.quantity,
+                lifespan: values.lifespan,
+                purchase_date: values.purchaseDate,
 
-                createdAt: now,
-                updatedAt: now
-            };
+                user_id: user.id
+            });
 
-            await db.gear.add(newGear);
+            if (error) throw error;
+
             toast.success(t('addGear.toastSuccess'));
             navigate('/');
         } catch (error) {

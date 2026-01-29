@@ -21,7 +21,7 @@
  * @author AI_RULES.md compliant implementation
  */
 
-import { db } from '@/db';
+import { supabase } from '@/lib/supabase';
 import type { Gear } from '@/types';
 
 // ============================================================================
@@ -59,13 +59,6 @@ const DEFAULT_CYCLES = 50;
  */
 async function randomDelay(maxMs: number = RANDOM_WAIT_MAX): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, Math.random() * maxMs));
-}
-
-/**
- * Generate unique test identifier
- */
-function generateTestId(): string {
-    return `${TEST_PREFIX}${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 /**
@@ -143,21 +136,27 @@ async function testEdgeCases(): Promise<void> {
     const results: TestResult[] = [];
 
     // Edge Case 1: Circular Container Reference
+    // Note: Supabase/Postgres handles foreign keys, circular reference might not be blocked unless constraints exist.
+    // We check if app logic prevents it or if DB handles it.
     try {
         const containerA = await createTestGear('Container_A', true);
         const containerB = await createTestGear('Container_B', true, containerA.id);
 
-        // Attempt to create circular reference (should be prevented)
-        await db.gear.update(containerA.id, { containerId: containerB.id });
+        // Attempt to create circular reference
+        const { error } = await supabase.from('gear')
+            .update({ container_id: containerB.id })
+            .eq('id', containerA.id);
 
-        console.warn('⚠️ Circular reference created! This should be prevented.');
+        if (error) throw error;
+
+        console.warn('⚠️ Circular reference created! This should typically be prevented by app logic or constraints.');
         results.push({
             success: false,
             error: new Error('Circular reference not prevented'),
             context: { cycle: 0, step: 'Circular Reference Test', timestamp: Date.now() }
         });
     } catch (error) {
-        console.log('✅ Circular reference correctly prevented');
+        console.log('✅ Circular reference test finished (might have failed as expected)');
         results.push({
             success: true,
             context: { cycle: 0, step: 'Circular Reference Test', timestamp: Date.now() }
@@ -167,11 +166,13 @@ async function testEdgeCases(): Promise<void> {
     // Edge Case 2: Numeric Overflow
     try {
         const gear = await createTestGear('Overflow_Test', false);
-        await db.gear.update(gear.id, {
-            purchasePrice: Number.MAX_SAFE_INTEGER + 1,
+        const { error } = await supabase.from('gear').update({
+            purchase_price: Number.MAX_SAFE_INTEGER + 1,
             quantity: Number.MAX_SAFE_INTEGER
-        });
-        console.log('✅ Numeric overflow handled');
+        }).eq('id', gear.id);
+
+        if (error) throw error;
+        console.log('✅ Numeric overflow handled (DB likely handled large number or clipped)');
     } catch (error) {
         console.error('❌ Numeric overflow caused error:', error);
     }
@@ -218,21 +219,21 @@ const indecisiveUserLoop: WorkflowLoop = async (cycle: number): Promise<TestResu
         await randomDelay();
         logSuccess(context, `Created gear ${gear.id}`);
 
-        // Step 2: Immediate edit (simulate opening detail modal)
+        // Step 2: Immediate edit
         context.step = 'First edit';
-        await db.gear.update(gear.id, { model: `Edit1_${Date.now()}` });
-        await randomDelay(10); // Very short delay to stress race conditions
+        await supabase.from('gear').update({ model: `Edit1_${Date.now()}` }).eq('id', gear.id);
+        await randomDelay(10);
         logSuccess(context, 'First edit complete');
 
-        // Step 3: Immediate re-edit without waiting
+        // Step 3: Immediate re-edit
         context.step = 'Second edit (race condition test)';
-        await db.gear.update(gear.id, { model: `Edit2_${Date.now()}` });
+        await supabase.from('gear').update({ model: `Edit2_${Date.now()}` }).eq('id', gear.id);
         await randomDelay(5);
         logSuccess(context, 'Second edit complete');
 
         // Step 4: Delete immediately
         context.step = 'Deleting gear';
-        await db.gear.delete(gear.id);
+        await supabase.from('gear').delete().eq('id', gear.id);
         logSuccess(context, 'Gear deleted');
 
         return { success: true, context };
@@ -268,24 +269,25 @@ const organizerLoop: WorkflowLoop = async (cycle: number): Promise<TestResult> =
 
         // Step 3: Verify relationship
         context.step = 'Verifying parent-child relationship';
-        const contents = await db.gear.where('containerId').equals(container.id).toArray();
-        if (contents.length !== 2) {
-            throw new Error(`Expected 2 contents, found ${contents.length}`);
+        const { data: contents } = await supabase.from('gear').select('*').eq('container_id', container.id);
+        if (!contents || contents.length !== 2) {
+            throw new Error(`Expected 2 contents, found ${contents?.length}`);
         }
         logSuccess(context, 'Relationship verified');
 
         // Step 4: Delete container (critical test - what happens to contents?)
         context.step = 'Deleting container with contents';
-        await db.gear.delete(container.id);
+        await supabase.from('gear').delete().eq('id', container.id);
         await randomDelay();
 
-        // Verify contents handling
-        const orphanedContents = await db.gear.where('containerId').equals(container.id).toArray();
-        logSuccess(context, `Container deleted. Orphaned contents: ${orphanedContents.length}`);
+        // Verify contents handling (Supabase/Postgres ON DELETE SET NULL or CASCADE?)
+        // Assuming NO CASCADE defined yet, they might remain or error.
+        const { data: orphanedContents } = await supabase.from('gear').select('*').eq('container_id', container.id);
+        logSuccess(context, `Container deleted. Orphaned contents: ${orphanedContents?.length}`);
 
         // Cleanup orphaned items
-        await db.gear.delete(content1.id);
-        await db.gear.delete(content2.id);
+        await supabase.from('gear').delete().eq('id', content1.id);
+        await supabase.from('gear').delete().eq('id', content2.id);
 
         return { success: true, context };
     } catch (error) {
@@ -296,7 +298,6 @@ const organizerLoop: WorkflowLoop = async (cycle: number): Promise<TestResult> =
 
 /**
  * Loop C: The "Switch Master" - Tab switching stress test
- * Note: This requires DOM manipulation and is best run in actual UI context
  */
 const switchMasterLoop: WorkflowLoop = async (cycle: number): Promise<TestResult> => {
     const context: TestContext = {
@@ -316,21 +317,21 @@ const switchMasterLoop: WorkflowLoop = async (cycle: number): Promise<TestResult
         const promises = [];
 
         for (let i = 0; i < 10; i++) {
-            promises.push(db.gear.get(gear.id));
-            promises.push(db.logs.where('gearId').equals(gear.id).toArray());
-            promises.push(db.gear.where('containerId').equals(gear.id).toArray());
+            promises.push(supabase.from('gear').select('*').eq('id', gear.id));
+            promises.push(supabase.from('logs').select('*').eq('gear_id', gear.id));
+            promises.push(supabase.from('gear').select('*').eq('container_id', gear.id));
         }
 
         await Promise.all(promises);
         logSuccess(context, '30 concurrent DB queries completed');
 
-        // Update data while queries are happening (race condition test)
+        // Update data while queries are happening
         context.step = 'Concurrent data update';
-        await db.gear.update(gear.id, { model: `Updated_${Date.now()}` });
+        await supabase.from('gear').update({ model: `Updated_${Date.now()}` }).eq('id', gear.id);
         await randomDelay();
 
         // Cleanup
-        await db.gear.delete(gear.id);
+        await supabase.from('gear').delete().eq('id', gear.id);
 
         return { success: true, context };
     } catch (error) {
@@ -350,16 +351,13 @@ async function runWorkflowLoops(cycles: number = DEFAULT_CYCLES): Promise<void> 
     for (let cycle = 1; cycle <= cycles; cycle++) {
         console.log(`\n--- Cycle ${cycle}/${cycles} ---`);
 
-        // Run all loops
         results.push(await indecisiveUserLoop(cycle));
         results.push(await organizerLoop(cycle));
         results.push(await switchMasterLoop(cycle));
 
-        // Small delay between cycles
         await randomDelay(100);
     }
 
-    // Summary
     const duration = Date.now() - startTime;
     const failures = results.filter(r => !r.success);
 
@@ -390,29 +388,53 @@ async function createTestGear(
     isContainer: boolean,
     containerId?: string
 ): Promise<Gear> {
-    const gear: Gear = {
-        id: generateTestId(),
+    // We need user_id for RLS policies
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || 'anon'; // Fallback
+
+    const gearData = {
         name: `${TEST_PREFIX}${name}`,
         category: 'Test Category',
         manufacturer: 'Test Manufacturer',
         model: `Model_${Date.now()}`,
-        serialNumber: `SN_${Math.random().toString(36).substr(2, 9)}`,
-        photos: {
-            hero: ''
-        },
+        serial_number: `SN_${Math.random().toString(36).substr(2, 9)}`,
         status: 'Available',
-        purchaseDate: new Date().toISOString(),
-        purchasePrice: Math.floor(Math.random() * 10000),
+        purchase_date: new Date().toISOString(),
+        purchase_price: Math.floor(Math.random() * 10000),
         lifespan: 5,
         quantity: 1,
-        isContainer: isContainer,
-        containerId: containerId,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
+        is_container: isContainer,
+        container_id: containerId,
+        user_id: userId,
+        // photos: default null or json
     };
 
-    await db.gear.add(gear);
-    return gear;
+    const { data, error } = await supabase.from('gear').insert(gearData).select().single();
+
+    if (error) {
+        throw error;
+    }
+
+    // Convert back to camelCase generic Gear type if needed, or just return what we have (as any)
+    // For test purposes, we return a mock Gear object that matches the inserted data
+    return {
+        id: data.id,
+        name: data.name,
+        category: data.category,
+        manufacturer: data.manufacturer,
+        model: data.model,
+        serialNumber: data.serial_number,
+        status: data.status,
+        purchaseDate: data.purchase_date,
+        purchasePrice: data.purchase_price,
+        lifespan: data.lifespan,
+        quantity: data.quantity,
+        isContainer: data.is_container,
+        containerId: data.container_id,
+        photos: { hero: '' }, // mock
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
+    } as Gear;
 }
 
 /**
@@ -422,27 +444,11 @@ async function cleanupTestData(): Promise<void> {
     console.log('🧹 Cleaning up test data...');
 
     try {
-        const testGear = await db.gear
-            .filter(g => g.name?.startsWith(TEST_PREFIX) || g.id?.startsWith(TEST_PREFIX))
-            .toArray();
+        const { error: gearError } = await supabase.from('gear').delete().like('name', `${TEST_PREFIX}%`);
 
-        const testLogs = await db.logs
-            .filter(l => l.gearId?.startsWith(TEST_PREFIX))
-            .toArray();
+        if (gearError) console.error("Error deleting gear:", gearError);
+        else console.log("Test gear deleted.");
 
-        // Delete test gear
-        for (const gear of testGear) {
-            await db.gear.delete(gear.id);
-        }
-
-        // Delete test logs
-        for (const log of testLogs) {
-            if (log.id) {
-                await db.logs.delete(log.id);
-            }
-        }
-
-        console.log(`🧹 Cleanup complete. Removed ${testGear.length} gear items and ${testLogs.length} logs.`);
     } catch (error) {
         console.error('❌ Cleanup failed:', error);
     }

@@ -26,41 +26,41 @@ export interface Gear {
 
     productEra?: string; // e.g. "Released 2015", "1980s Vintage"
     notes?: string; // Additional notes
-    createdAt: number; // Timestamp
-    updatedAt: number; // Timestamp
+    createdAt: string; // ISO String from Supabase
+    updatedAt: string; // ISO String from Supabase
     documents?: {
         id: string;
         name: string;
         data: string; // Base64
-        uploadDate: number;
+        uploadDate: string; // ISO String
     }[];
-    logs?: Log[]; // Associated logs (for joins, not stored directly)
+    logs?: Log[];
 }
 
 export interface PackingList {
-    id: number; // Auto-increment ID in Dexie
+    id: string; // UUID from Supabase
     name: string;
     date: string;
-    gearIds: string[]; // List of gear IDs included
-    createdAt: number;
-    updatedAt: number;
+    gearIds: string[];
+    createdAt: string;
+    updatedAt: string;
 }
 
 export type BillingCycle = 'monthly' | 'yearly';
 export type SubscriptionCategory = 'Software' | 'Plugin' | 'Cloud Storage' | 'Streaming' | 'Other';
 
 export interface Subscription {
-    id: string; // UUID
-    name: string; // Service name (e.g., "Smaart v9", "Adobe CC")
+    id: string;
+    name: string;
     category: SubscriptionCategory;
-    price: number; // Cost amount
+    price: number;
     billingCycle: BillingCycle;
-    startDate: string; // ISO Date - when subscription started
-    nextPaymentDate: string; // ISO Date
-    autoRenew: boolean; // Whether it auto-renews
+    startDate: string;
+    nextPaymentDate: string;
+    autoRenew: boolean;
     notes?: string;
-    createdAt: number; // Timestamp
-    updatedAt: number; // Timestamp
+    createdAt: string;
+    updatedAt: string;
 }
 
 

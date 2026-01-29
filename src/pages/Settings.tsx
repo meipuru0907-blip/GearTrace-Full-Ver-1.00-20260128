@@ -1,27 +1,28 @@
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Download, Database, Upload, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import XLSX from "xlsx-js-style";
-import { useRef } from "react";
 import { exportTaxLedger } from "@/lib/excel";
 import { downloadTaxGuideExcel, getTaxGuideEntryCount } from "@/utils/excelExport";
-import { openBugReportForm } from "@/utils/systemInfo";
+import { BackupService } from "@/services/backupService";
+import { BugReportSection } from "@/components/settings/BugReportSection";
 
 export default function Settings() {
-    const gears = useLiveQuery(() => db.gear.toArray());
-    const logs = useLiveQuery(() => db.logs.toArray());
+    const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleExportXlsx = () => {
-        if (!gears || gears.length === 0) {
-            toast.error("データがありません。");
-            return;
-        }
-
+    const handleExportXlsx = async () => {
+        setIsLoading(true);
         try {
+            const { gear: gears } = await BackupService.fetchAllData();
+
+            if (!gears || gears.length === 0) {
+                toast.error("データがありません。");
+                return;
+            }
+
             const data = gears.map(g => {
                 return {
                     "資産ID": g.id,
@@ -51,64 +52,62 @@ export default function Settings() {
                 { wch: 10 }   // 耐用年数
             ];
 
-            // スタイルを適用
-            const range = XLSX.utils.decode_range(ws['!ref']!);
-            for (let R = range.s.r; R <= range.e.r; ++R) {
-                for (let C = range.s.c; C <= range.e.c; ++C) {
-                    const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-                    if (!ws[cellRef]) continue;
+            // スタイルを適用 (Original styling logic kept for consistency)
+            if (ws['!ref']) {
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                for (let R = range.s.r; R <= range.e.r; ++R) {
+                    for (let C = range.s.c; C <= range.e.c; ++C) {
+                        const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                        if (!ws[cellRef]) continue;
 
-                    const cellStyle: any = {
-                        border: {
-                            top: { style: "thin", color: { rgb: "000000" } },
-                            bottom: { style: "thin", color: { rgb: "000000" } },
-                            left: { style: "thin", color: { rgb: "000000" } },
-                            right: { style: "thin", color: { rgb: "000000" } }
-                        },
-                        alignment: { vertical: "center" },
-                        font: { name: "Yu Gothic", sz: 11 }
-                    };
-
-                    if (R === 0) {
-                        // ヘッダー行
-                        cellStyle.fill = { fgColor: { rgb: "4472C4" } };
-                        cellStyle.font = {
-                            ...cellStyle.font,
-                            color: { rgb: "FFFFFF" },
-                            bold: true,
-                            sz: 12
+                        const cellStyle: any = {
+                            border: {
+                                top: { style: "thin", color: { rgb: "000000" } },
+                                bottom: { style: "thin", color: { rgb: "000000" } },
+                                left: { style: "thin", color: { rgb: "000000" } },
+                                right: { style: "thin", color: { rgb: "000000" } }
+                            },
+                            alignment: { vertical: "center" },
+                            font: { name: "Yu Gothic", sz: 11 }
                         };
-                        cellStyle.alignment = { horizontal: "center", vertical: "center" };
-                    } else {
-                        // データ行
-                        // 購入価格列は右揃えで数値フォーマット
-                        if (C === 7) {
-                            cellStyle.alignment.horizontal = "right";
-                            ws[cellRef].z = '#,##0';
-                        }
-                        // 耐用年数列は中央揃えで太字
-                        if (C === 8) {
-                            cellStyle.alignment.horizontal = "center";
-                            cellStyle.font.bold = true;
-                        }
-                        // ステータス列に応じて背景色を設定
-                        if (C === 5) {
-                            const status = ws[cellRef].v;
-                            if (status === "Available" || status === "稼働中") {
-                                cellStyle.fill = { fgColor: { rgb: "E8F5E9" } }; // 緑
-                            } else if (status === "Maintenance" || status === "メンテナンス中") {
-                                cellStyle.fill = { fgColor: { rgb: "FFF9C4" } }; // 黄
-                            } else if (status === "Repair" || status === "修理中") {
-                                cellStyle.fill = { fgColor: { rgb: "FFE0B2" } }; // オレンジ
-                            } else if (status === "Broken" || status === "故障") {
-                                cellStyle.fill = { fgColor: { rgb: "FFCDD2" } }; // 赤
-                            } else if (status === "Missing" || status === "紛失") {
-                                cellStyle.fill = { fgColor: { rgb: "F3E5F5" } }; // 紫
+
+                        if (R === 0) {
+                            // ヘッダー行
+                            cellStyle.fill = { fgColor: { rgb: "4472C4" } };
+                            cellStyle.font = {
+                                ...cellStyle.font,
+                                color: { rgb: "FFFFFF" },
+                                bold: true,
+                                sz: 12
+                            };
+                            cellStyle.alignment = { horizontal: "center", vertical: "center" };
+                        } else {
+                            // データ行
+                            if (C === 7) {
+                                cellStyle.alignment.horizontal = "right";
+                                ws[cellRef].z = '#,##0';
+                            }
+                            if (C === 8) {
+                                cellStyle.alignment.horizontal = "center";
+                                cellStyle.font.bold = true;
+                            }
+                            if (C === 5) {
+                                const status = ws[cellRef].v;
+                                if (status === "Available" || status === "稼働中") {
+                                    cellStyle.fill = { fgColor: { rgb: "E8F5E9" } };
+                                } else if (status === "Maintenance" || status === "メンテナンス中") {
+                                    cellStyle.fill = { fgColor: { rgb: "FFF9C4" } };
+                                } else if (status === "Repair" || status === "修理中") {
+                                    cellStyle.fill = { fgColor: { rgb: "FFE0B2" } };
+                                } else if (status === "Broken" || status === "故障") {
+                                    cellStyle.fill = { fgColor: { rgb: "FFCDD2" } };
+                                } else if (status === "Missing" || status === "紛失") {
+                                    cellStyle.fill = { fgColor: { rgb: "F3E5F5" } };
+                                }
                             }
                         }
+                        ws[cellRef].s = cellStyle;
                     }
-
-                    ws[cellRef].s = cellStyle;
                 }
             }
 
@@ -132,15 +131,20 @@ export default function Settings() {
         } catch (err) {
             console.error(err);
             toast.error("出力に失敗しました。");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleBackupJson = () => {
+    const handleBackupJson = async () => {
+        setIsLoading(true);
         try {
+            const { gear, logs } = await BackupService.fetchAllData();
+
             const backup = {
                 exportDate: new Date().toISOString(),
                 version: "1.0",
-                gear: gears || [],
+                gear: gear || [],
                 logs: logs || []
             };
 
@@ -159,20 +163,26 @@ export default function Settings() {
         } catch (err) {
             console.error(err);
             toast.error("バックアップに失敗しました。");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleTaxExport = () => {
-        if (!gears || gears.length === 0) {
-            toast.error("データがありません。");
-            return;
-        }
+    const handleTaxExport = async () => {
+        setIsLoading(true);
         try {
-            exportTaxLedger(gears);
+            const { gear } = await BackupService.fetchAllData();
+            if (!gear || gear.length === 0) {
+                toast.error("データがありません。");
+                return;
+            }
+            exportTaxLedger(gear);
             toast.success("確定申告用データを出力しました！");
         } catch (err) {
             console.error(err);
             toast.error("出力に失敗しました。");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -180,6 +190,7 @@ export default function Settings() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        setIsLoading(true);
         try {
             const text = await file.text();
             const data = JSON.parse(text);
@@ -193,12 +204,7 @@ export default function Settings() {
                 return;
             }
 
-            await db.transaction('rw', db.gear, db.logs, async () => {
-                await db.gear.bulkPut(data.gear);
-                if (data.logs && Array.isArray(data.logs)) {
-                    await db.logs.bulkPut(data.logs);
-                }
-            });
+            await BackupService.restoreData(data);
 
             toast.success("データの復元が完了しました！");
             setTimeout(() => window.location.reload(), 1000);
@@ -207,6 +213,7 @@ export default function Settings() {
             console.error(err);
             toast.error("ファイルの読み込みに失敗しました。形式を確認してください。");
         } finally {
+            setIsLoading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
@@ -244,10 +251,10 @@ export default function Settings() {
                         <div className="p-4 border rounded-lg space-y-4 bg-card">
                             <h3 className="font-medium">データ書き出し</h3>
                             <div className="space-y-2">
-                                <Button onClick={handleExportXlsx} variant="outline" className="w-full justify-start">
+                                <Button onClick={handleExportXlsx} disabled={isLoading} variant="outline" className="w-full justify-start">
                                     <Download className="mr-2 h-4 w-4" /> Excel出力 (資産台帳)
                                 </Button>
-                                <Button onClick={handleTaxExport} variant="outline" className="w-full justify-start">
+                                <Button onClick={handleTaxExport} disabled={isLoading} variant="outline" className="w-full justify-start">
                                     <Download className="mr-2 h-4 w-4" /> 確定申告用データ (.xlsx)
                                 </Button>
                                 <Button onClick={handleDownloadTaxGuide} variant="outline" className="w-full justify-start">
@@ -256,7 +263,7 @@ export default function Settings() {
                                 <p className="text-xs text-muted-foreground pl-1">
                                     主要なメーカー・機種別の詳細リスト（全100機種以上）
                                 </p>
-                                <Button onClick={handleBackupJson} variant="secondary" className="w-full justify-start">
+                                <Button onClick={handleBackupJson} disabled={isLoading} variant="secondary" className="w-full justify-start">
                                     <Download className="mr-2 h-4 w-4" /> JSONバックアップ (無料)
                                 </Button>
                             </div>
@@ -279,6 +286,7 @@ export default function Settings() {
                                 />
                                 <Button
                                     onClick={() => fileInputRef.current?.click()}
+                                    disabled={isLoading}
                                     variant="outline"
                                     className="w-full justify-start"
                                 >
@@ -292,35 +300,7 @@ export default function Settings() {
                 {/* Bug Report & Feedback Section */}
                 <div className="space-y-4 mt-8">
                     <h2 className="text-xl font-semibold">サポート</h2>
-                    <div className="p-4 border rounded-lg space-y-4 bg-card">
-                        <div>
-                            <h3 className="font-medium mb-2">フィードバック</h3>
-                            <p className="text-sm text-muted-foreground mb-4">
-                                バグの報告や機能のリクエストを送信できます。<br />
-                                お使いの環境情報が自動で入力されます。
-                            </p>
-                        </div>
-                        <Button
-                            variant="outline"
-                            className="w-full sm:w-auto gap-2"
-                            onClick={openBugReportForm}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                                <path d="m8 2 1.88 1.88" />
-                                <path d="M14.12 3.88 16 2" />
-                                <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
-                                <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
-                                <path d="M12 20v-9" />
-                                <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
-                                <path d="M6 13H2" />
-                                <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
-                                <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
-                                <path d="M22 13h-4" />
-                                <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
-                            </svg>
-                            🐛 バグを報告 / 要望を送る
-                        </Button>
-                    </div>
+                    <BugReportSection />
                 </div>
             </div>
         </Layout >

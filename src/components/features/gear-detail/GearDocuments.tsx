@@ -3,14 +3,15 @@ import { Upload, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { db } from "@/db";
+import { supabase } from "@/lib/supabase";
 import type { Gear } from "@/types";
 
 interface GearDocumentsProps {
     gear: Gear;
+    onUpdate?: () => void;
 }
 
-export function GearDocuments({ gear }: GearDocumentsProps) {
+export function GearDocuments({ gear, onUpdate }: GearDocumentsProps) {
     const documentInputRef = useRef<HTMLInputElement>(null);
 
     const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -23,17 +24,22 @@ export function GearDocuments({ gear }: GearDocumentsProps) {
             try {
                 // @ts-ignore
                 const currentDocs = gear?.documents || [];
-                await db.gear.update(gear.id, {
-                    // @ts-ignore
-                    documents: [...currentDocs, {
-                        id: crypto.randomUUID(),
-                        name: file.name,
-                        data: base64,
-                        uploadDate: Date.now()
-                    }],
-                    updatedAt: Date.now()
-                });
+                const newDocs = [...currentDocs, {
+                    id: crypto.randomUUID(),
+                    name: file.name,
+                    data: base64,
+                    uploadDate: new Date().toISOString()
+                }];
+
+                const { error } = await supabase.from('gear').update({
+                    documents: newDocs,
+                    updated_at: new Date().toISOString()
+                }).eq('id', gear.id);
+
+                if (error) throw error;
+
                 toast.success("ドキュメントをアップロードしました！");
+                if (onUpdate) onUpdate();
             } catch (error) {
                 console.error(error);
                 toast.error("アップロードに失敗しました。");

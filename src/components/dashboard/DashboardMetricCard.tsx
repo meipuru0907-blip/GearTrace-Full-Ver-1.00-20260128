@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 
 interface DashboardMetricCardProps {
     title: string;
+    value: string | number;
+    subValue?: string;
     icon: ReactNode;
     onClick?: () => void;
     variant?: 'default' | 'primary' | 'success' | 'warning';
@@ -20,6 +22,8 @@ interface DashboardMetricCardProps {
  */
 export function DashboardMetricCard({
     title,
+    value,
+    subValue,
     icon,
     onClick,
     variant = 'default'
@@ -42,22 +46,26 @@ export function DashboardMetricCard({
             )}
             onClick={onClick}
         >
-            <CardContent className="p-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        {icon}
-                        <span>{title}</span>
+            <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                            {icon}
+                            <span>{title}</span>
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-2xl font-bold tracking-tight">{value}</h3>
+                            {subValue && (
+                                <p className="text-xs text-muted-foreground">{subValue}</p>
+                            )}
+                        </div>
                     </div>
                     {isClickable && (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors mt-1" />
                     )}
                 </div>
-                {isClickable && (
-                    <div className="text-xs text-muted-foreground mt-1.5 text-center">
-                        クリックして詳細を表示
-                    </div>
-                )}
             </CardContent>
         </Card>
     );
 }
+

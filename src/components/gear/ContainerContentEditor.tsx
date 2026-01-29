@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/db";
+import { useGear } from "@/hooks/useGear";
+import { supabase } from "@/lib/supabase";
 import {
     Dialog,
     DialogContent,
@@ -31,11 +31,11 @@ export function ContainerContentEditor({ container, open, onOpenChange, onSucces
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isInitialized, setIsInitialized] = useState(false);
 
-    const allGear = useLiveQuery(() =>
-        db.gear
-            .where('id').notEqual(container.id)
-            .toArray()
-    );
+    const { gears: allGearRaw } = useGear();
+
+    const allGear = useMemo(() => {
+        return allGearRaw ? allGearRaw.filter(g => g.id !== container.id) : [];
+    }, [allGearRaw, container.id]);
 
     useMemo(() => {
         if (allGear && !isInitialized && open) {
@@ -88,25 +88,24 @@ export function ContainerContentEditor({ container, open, onOpenChange, onSucces
         setIsSaving(true);
 
         try {
-            const updates: Promise<number>[] = [];
-            const now = Date.now();
+            const updates: Promise<any>[] = [];
 
             for (const gear of allGear) {
                 const isSelected = selectedIds.has(gear.id);
                 const currentContainerId = gear.containerId;
 
                 if (isSelected && currentContainerId !== container.id) {
-                    updates.push(db.gear.update(gear.id, {
-                        containerId: container.id,
-                        updatedAt: now
-                    }));
+                    updates.push(supabase.from('gear').update({
+                        container_id: container.id,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', gear.id) as unknown as Promise<any>);
                 }
 
                 if (!isSelected && currentContainerId === container.id) {
-                    updates.push(db.gear.update(gear.id, {
-                        containerId: undefined,
-                        updatedAt: now
-                    }));
+                    updates.push(supabase.from('gear').update({
+                        container_id: null,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', gear.id) as unknown as Promise<any>);
                 }
             }
 

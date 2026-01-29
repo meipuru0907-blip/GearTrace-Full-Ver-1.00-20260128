@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { supabase } from "@/lib/supabase";
 import type { Gear } from "@/types";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
@@ -14,51 +14,107 @@ interface EditGearModalProps {
 export function EditGearModal({ gear, onClose, onUpdate }: EditGearModalProps) {
     const handleFormSubmit = async (values: GearFormValues) => {
         try {
+            const now = new Date().toISOString();
+
             if (values.statusBreakdown && Object.keys(values.statusBreakdown).length > 0) {
                 // Split Logic
                 const entries = Object.entries(values.statusBreakdown);
-
-                // 1. Update the original record with the first breakdown entry
-                // Ideally, we keep the original ID for one chunk. 
-                // Let's iterate and use the first one for the original ID.
-
                 const [firstStatus, firstQty] = entries[0];
 
-                // Update original
-                await db.gear.update(gear.id, {
-                    ...values,
-                    // Remove transient field
-                    status: firstStatus as Gear['status'],
+                // 1. Update original
+                const { error: updateError } = await supabase.from('gear').update({
+                    name: values.name,
+                    category: values.category,
+                    manufacturer: values.manufacturer,
+                    model: values.model,
+                    serial_number: values.serialNumber,
+                    color_tag: values.colorTag,
+                    purchase_price: values.purchasePrice,
+                    notes: values.notes,
+                    lifespan: values.lifespan,
+                    purchase_date: values.purchaseDate,
+
+                    status: firstStatus,
                     quantity: firstQty,
-                    colorTag: values.colorTag as Gear['colorTag'],
-                    updatedAt: Date.now(),
-                });
+                    updated_at: now,
+                }).eq('id', gear.id);
+
+                if (updateError) throw updateError;
 
                 // 2. Create new records for the rest
                 const remainingEntries = entries.slice(1);
-                const newRecords = remainingEntries.map(([status, qty]) => ({
-                    ...gear, // Copy original properties (photos, details etc)
-                    ...values, // Overwrite with form values (name, etc might have changed)
-                    id: crypto.randomUUID(), // New ID
-                    status: status as Gear['status'],
-                    quantity: qty,
-                    colorTag: values.colorTag as Gear['colorTag'],
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                }));
+                if (remainingEntries.length > 0) {
+                    const newRecords = remainingEntries.map(([status, qty]) => ({
+                        // Copy original properties that should persist
+                        // We need to map camelCase Gear to snake_case DB columns manually or carefully
+                        user_id: (gear as any).userId, // If we have it? Or just assume same user. 
+                        // Actually better to not include user_id and let backend handle it? 
+                        // But we need RLS. We should use `useAuth().user.id` or assume we can select `user_id` from original.
+                        // Let's rely on copying relevant fields.
+                        name: values.name,
+                        category: values.category,
+                        manufacturer: values.manufacturer,
+                        model: values.model,
+                        serial_number: values.serialNumber, // Typically serial might differ if splitting? But usually same batch.
+                        photos: (gear as any).photos, // Need to persist photos
+                        visual_tag_color: (gear as any).visualTagColor,
+                        color_tag: values.colorTag,
+                        purchase_price: values.purchasePrice,
+                        is_container: (gear as any).isContainer,
+                        // container_id: (gear as any).containerId, // Should the split items be in same container? Yes.
+                        notes: values.notes,
+                        lifespan: values.lifespan,
+                        purchase_date: values.purchaseDate,
 
-                if (newRecords.length > 0) {
-                    await db.gear.bulkAdd(newRecords);
+                        status: status,
+                        quantity: qty,
+
+                        // id is auto-generated or use crypto.randomUUID()
+                        // supabase insert handles default id.
+                    }));
+
+                    // We need user_id for RLS insert.
+                    // Fetch user_id from original gear or current auth user?
+                    // Safe to fetch current user id via supabase.auth.getUser() if not available.
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        newRecords.forEach((r: any) => r.user_id = user.id);
+                    }
+
+                    // We also need `container_id` mapped correctly.
+                    if (gear.containerId) {
+                        newRecords.forEach((r: any) => r.container_id = gear.containerId);
+                    }
+
+                    const { error: insertError } = await supabase.from('gear').insert(newRecords);
+                    if (insertError) throw insertError;
                 }
 
                 toast.success(`機材をステータスごとに分割・更新しました`);
             } else {
                 // Normal Update
-                await db.gear.update(gear.id, {
-                    ...values,
-                    colorTag: values.colorTag as Gear['colorTag'],
-                    updatedAt: Date.now(),
-                });
+                const { error } = await supabase.from('gear').update({
+                    name: values.name,
+                    category: values.category,
+                    manufacturer: values.manufacturer,
+                    model: values.model,
+                    serial_number: values.serialNumber,
+                    color_tag: values.colorTag,
+                    purchase_price: values.purchasePrice,
+                    status: values.status,
+                    is_container: values.isContainer,
+                    // container_id: handled? If form allows changing container, we need it. 
+                    // GearForm usually doesn't show container selector? 
+                    // If not in values, we shouldn't overwrite it to null/undefined unless intended.
+                    // safely omit container_id if not in values.
+                    notes: values.notes,
+                    quantity: values.quantity,
+                    lifespan: values.lifespan,
+                    purchase_date: values.purchaseDate,
+                    updated_at: now,
+                }).eq('id', gear.id);
+
+                if (error) throw error;
                 toast.success("機材情報を更新しました");
             }
 
