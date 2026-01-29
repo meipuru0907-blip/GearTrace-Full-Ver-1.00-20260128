@@ -1,7 +1,7 @@
 import XLSX from 'xlsx-js-style';
 import { format } from 'date-fns';
 import type { Gear } from '@/types';
-import { getStatusLabel } from '@/utils/constants';
+
 
 /**
  * 確定申告用データ（減価償却費の計算）をスタイリング付きでExcel出力
@@ -109,105 +109,4 @@ export const exportTaxLedger = (gears: Gear[]) => {
     XLSX.writeFile(workbook, `確定申告用データ_${format(new Date(), 'yyyyMMdd')}.xlsx`);
 };
 
-/**
- * 全機材データを日本語でExcel出力
- * ステータスなど全て日本語で表示される
- */
-export const exportAllGear = (gears: Gear[]) => {
-    const data = gears.map((gear) => ({
-        'メーカー': gear.manufacturer,
-        'モデル名': gear.model,
-        '機材名': gear.name || '',
-        'カテゴリ': gear.category,
-        'サブカテゴリ': gear.subCategory || '',
-        'ステータス': getStatusLabel(gear.status), // 日本語化
-        'シリアル番号': gear.serialNumber || '',
-        '数量': gear.quantity || 1,
-        '購入日': gear.purchaseDate,
-        '購入価格': gear.purchasePrice,
-        '耐用年数': gear.lifespan,
-        'コンテナ': gear.isContainer ? 'はい' : 'いいえ',
-        'メモ': gear.notes || ''
-    }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    // カラム幅を設定
-    worksheet["!cols"] = [
-        { wch: 20 },  // メーカー
-        { wch: 20 },  // モデル名
-        { wch: 20 },  // 機材名
-        { wch: 15 },  // カテゴリ
-        { wch: 15 },  // サブカテゴリ
-        { wch: 15 },  // ステータス
-        { wch: 20 },  // シリアル番号
-        { wch: 8 },   // 数量
-        { wch: 12 },  // 購入日
-        { wch: 12 },  // 購入価格
-        { wch: 10 },  // 耐用年数
-        { wch: 10 },  // コンテナ
-        { wch: 30 }   // メモ
-    ];
-
-    // スタイルを適用
-    const range = XLSX.utils.decode_range(worksheet['!ref']!);
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-            if (!worksheet[cellRef]) continue;
-
-            const cellStyle: any = {
-                border: {
-                    top: { style: "thin", color: { rgb: "CCCCCC" } },
-                    bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-                    left: { style: "thin", color: { rgb: "CCCCCC" } },
-                    right: { style: "thin", color: { rgb: "CCCCCC" } }
-                },
-                alignment: { vertical: "center" },
-                font: { name: "Yu Gothic", sz: 10 }
-            };
-
-            if (R === 0) {
-                // ヘッダー行
-                cellStyle.fill = { fgColor: { rgb: "4472C4" } };
-                cellStyle.font = {
-                    ...cellStyle.font,
-                    color: { rgb: "FFFFFF" },
-                    bold: true,
-                    sz: 11
-                };
-                cellStyle.alignment = { horizontal: "center", vertical: "center" };
-            } else {
-                // データ行
-                // 数値列は右揃え
-                if (C === 7 || C === 8 || C === 9 || C === 10) {
-                    cellStyle.alignment.horizontal = "right";
-                    // 金額列は数値フォーマット
-                    if (C === 9) {
-                        worksheet[cellRef].z = '#,##0';
-                    }
-                }
-                // ステータス列は中央揃え
-                if (C === 5 || C === 11) {
-                    cellStyle.alignment.horizontal = "center";
-                }
-            }
-
-            worksheet[cellRef].s = cellStyle;
-        }
-    }
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "機材一覧");
-
-    // メタデータ
-    workbook.Props = {
-        Title: '機材一覧データ',
-        Subject: 'GearTrace機材管理システム',
-        Author: 'GearTrace',
-        CreatedDate: new Date()
-    };
-
-    // ダウンロード
-    XLSX.writeFile(workbook, `機材一覧_${format(new Date(), 'yyyyMMdd')}.xlsx`);
-};
